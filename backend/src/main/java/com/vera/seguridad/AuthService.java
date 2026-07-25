@@ -29,14 +29,16 @@ public class AuthService {
 	private final RolRepository roles;
 	private final PasswordEncoder codificador;
 	private final JwtService jwt;
+	private final com.vera.negocio.AuditoriaService auditoria;
 
 	public AuthService(UsuarioRepository usuarios, TenantRepository tenants, RolRepository roles,
-			PasswordEncoder codificador, JwtService jwt) {
+			PasswordEncoder codificador, JwtService jwt, com.vera.negocio.AuditoriaService auditoria) {
 		this.usuarios = usuarios;
 		this.tenants = tenants;
 		this.roles = roles;
 		this.codificador = codificador;
 		this.jwt = jwt;
+		this.auditoria = auditoria;
 	}
 
 	public AuthDTO.RespuestaAuth login(AuthDTO.PeticionLogin peticion) {
@@ -51,6 +53,8 @@ public class AuthService {
 
 		usuario.setUltimoAcceso(OffsetDateTime.now());
 		Usuario guardado = TenantContext.comoSistema(() -> usuarios.save(usuario));
+		auditoria.registrar(guardado.getTenant() != null ? guardado.getTenant().getId() : null,
+				guardado.getId(), com.vera.negocio.AuditoriaService.LOGIN, guardado.getEmail());
 		return responder(guardado);
 	}
 
@@ -91,7 +95,10 @@ public class AuthService {
 			duenio.setPasswordHash(codificador.encode(peticion.password()));
 			duenio.setRol(owner);
 
-			return responder(usuarios.save(duenio));
+			Usuario guardado = usuarios.save(duenio);
+			auditoria.registrar(creado.getId(), guardado.getId(),
+					com.vera.negocio.AuditoriaService.REGISTRO, creado.getNombre());
+			return responder(guardado);
 		});
 	}
 

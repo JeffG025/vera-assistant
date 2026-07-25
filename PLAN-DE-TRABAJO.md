@@ -58,7 +58,7 @@ Sitio del cliente (cualquier web)
 | | Bloque | Contenido | Semanas | Estado |
 |--|-------|-----------|:--:|:--:|
 | **0** | **Cimientos** | Monorepo, Spring Boot, Docker Compose (Postgres+pgvector), esquema base, CI | 1 | 🟡 |
-| **1** | **Núcleo multi-tenant** | Aislamiento de datos, auth JWT + roles, alta de inquilino, panel base | 2 | ⬜ |
+| **1** | **Núcleo multi-tenant** | Aislamiento de datos, auth JWT + roles, alta de inquilino, panel base | 2 | ✅ |
 | **2** | **Ingesta de conocimiento** | Fuentes (PDF/texto/URL), crawler, troceado, embeddings, panel de fuentes | 2 | ⬜ |
 | **3** | **Motor de respuesta (RAG)** | Recuperación híbrida, generación con citas, streaming, memoria, control de costo | 2 | ⬜ |
 | **4** | **Evaluación de calidad** | Golden set por inquilino, métricas de acierto y fidelidad, corrida en CI | 1 | ⬜ |
@@ -111,42 +111,54 @@ Leyenda: ✅ hecho · 🟡 en curso · ⬜ pendiente
 
 > 🐞 **Error atrapado antes de tiempo:** en modo librería Vite **no** sustituye `process.env.NODE_ENV`. Quedaba literal en el bundle → `process is not defined` en cualquier página de cliente, y se empaquetaba el React de desarrollo. Con `define` explícito: **580 kB → 191 kB** (173 → **58.3 kB** gzip).
 
-**Incremento 0.4 — Repo y despliegue temprano** ⬜
-- [ ] Git + repo en GitHub (privado por ahora), `.gitignore` sin secretos ni `.env`
-- [ ] GitHub Actions: compilar backend + frontend en cada push
-- [ ] Desplegar el esqueleto (Fly.io, igual que SIGAC) con Postgres gestionado
-- [ ] Verificar: `/api/health` responde en la URL pública
+**Incremento 0.4 — Repo y despliegue temprano** 🟡 (lo local está; falta lo que necesita cuenta del usuario)
+- [x] Git inicializado, `.gitattributes` para finales de línea, commits por incremento
+- [x] Verificado que no se versiona `node_modules/`, `target/`, `dist/` ni `.env`
+- [x] GitHub Actions: backend contra un Postgres+pgvector real y los dos frontends en matriz
+- [x] `backend/Dockerfile` multi-etapa (compila con Maven, corre sobre JRE alpine) y `.dockerignore`
+- [x] `backend/fly.toml` con health check real a `/api/health` y credenciales por secretos
+- [ ] **Pendiente (requiere tu acción):** crear el repo en GitHub — `gh` no está instalado
+- [ ] **Pendiente (requiere tu visto bueno):** `flyctl deploy` — provisiona recursos de pago en tu cuenta
 
 ---
 
 ## Bloque 1 — Núcleo multi-tenant
 
-**Incremento 1.1 — Modelo y aislamiento** ⬜
-- [ ] Entidad `Tenant` (nombre, slug, plan, estado) + `tenant_id` en toda tabla de datos
-- [ ] Filtro Hibernate automático por inquilino + resolución del inquilino por request
-- [ ] **RLS de Postgres** como segunda barrera
-- [ ] Verificar con prueba dedicada: el inquilino A **no** puede leer datos del B por ninguna vía
+**Incremento 1.1 — Modelo y aislamiento** ✅ (4 pruebas de aislamiento en verde)
+- [x] Entidades `Tenant`, `Usuario`, `Rol` con UUID + repositorios
+- [x] `TenantContext` por hilo + `DataSource` que aplica el inquilino a cada conexión y lo limpia al devolverla
+- [x] **RLS de Postgres** con `FORCE` y bypass explícito solo para login y alta
+- [x] Verificado: A no ve usuarios de B ni buscando por correo; sin contexto no se ve nada; escribir en otro negocio revienta
 
-**Incremento 1.2 — Autenticación y roles** ⬜
-- [ ] JWT con refresh; roles `SUPERADMIN` (tú), `OWNER` (dueño del negocio), `AGENT`
-- [ ] `POST /api/auth/login`, `/refresh`, `GET /api/auth/me`
-- [ ] Manejador global de errores + 401/403 diferenciados
+> 🔴 **Trampa que costó caro:** el usuario de la imagen Docker es **superusuario**, y Postgres **ignora RLS para superusuarios** — `FORCE` no lo evita. Había RLS que no protegía nada. La app baja a un rol `vera_app` sin privilegios (V3) en cuanto terminan las migraciones.
+>
+> **Cambio de diseño:** se descartó el filtro de Hibernate. RLS es estrictamente más fuerte y dos mecanismos que deben coincidir son una fuente de bugs.
 
-**Incremento 1.3 — Alta de inquilino (self-service)** ⬜
-- [ ] Registro: correo + negocio → crea inquilino, usuario OWNER y **clave pública** `pk_...`
-- [ ] Regeneración de clave, dominios permitidos, datos del negocio
-- [ ] Verificar: dos altas seguidas generan inquilinos con datos aislados
+**Incremento 1.2 — Autenticación y roles** ✅
+- [x] JWT de acceso (30 min) y refresco (7 días) con `SUPERADMIN` / `OWNER` / `AGENT`
+- [x] Filtro que autentica, fija el inquilino y **lo limpia siempre** al soltar el hilo
+- [x] `POST /api/auth/login`, `/refresco`, `GET /api/auth/me`
+- [x] Errores en JSON: 401 y 403 diferenciados, validaciones por campo
+- [x] Verificado: token de refresco **no** sirve como token de acceso
 
-**Incremento 1.4 — Panel base (React)** ⬜
-- [ ] Cliente HTTP central con JWT y manejo de sesión expirada
-- [ ] Contexto de auth, rutas protegidas por rol, layout con navegación
-- [ ] Páginas: Login, Registro, Panel inicial, Ajustes del negocio
-- [ ] Verificado con Playwright
+**Incremento 1.3 — Alta de inquilino (self-service)** ✅
+- [x] `POST /api/auth/registro`: crea negocio, dueño y clave pública `pk_...`
+- [x] Slug derivado del nombre, sin acentos, con desempate automático
+- [x] `GET/PATCH /api/negocio` + rotación de clave pública
+- [x] Verificado end-to-end: **17 comportamientos** (aislamiento, validaciones, duplicados, rotación)
 
-**Incremento 1.5 — Cuotas y auditoría** ⬜
-- [ ] Planes con límites (fuentes, mensajes/mes, tokens/mes)
-- [ ] Log de auditoría de acciones sensibles
-- [ ] Bloqueo al exceder cuota, con mensaje claro
+**Incremento 1.4 — Panel base (React)** ✅ (verificado en navegador)
+- [x] Cliente HTTP central: JWT, refresco automático en 401 y cierre de sesión si tampoco pasa
+- [x] Contexto de auth, rutas protegidas por sesión y por rol, layout con navegación
+- [x] Páginas: Login, Registro, Panel y Ajustes (con fragmento de instalación del widget)
+- [x] Verificado: entrar → panel con el negocio real → guardar dominios → confirmado en la base
+
+**Incremento 1.5 — Cuotas y auditoría** ✅
+- [x] `LimitesPlan` por plan (fuentes, mensajes/mes, tokens/mes), expuesto en `GET /api/negocio`
+- [x] Bitácora de acciones sensibles con RLS propio + `GET /api/negocio/auditoria` (solo OWNER)
+- [x] `CuotaService` con el punto único de corte por cuota
+- [x] Verificado: A ve sus 3 eventos y B solo el suyo; los conteos cuadran con la base
+- [ ] ⚠️ **Sin verificar todavía:** el corte por cuota. Nada consume cuota hasta las fuentes (bloque 2) y los mensajes (bloque 3)
 
 ---
 
@@ -313,3 +325,5 @@ Incrementos pequeños y **verificados** antes de avanzar. Trabajo **inline y fru
 - **2026-07-24** — **Incremento 0.3 ✅** — panel (5177) y widget (5178) en React 19 + Vite 8, ambos verificados en navegador. El widget ya compila a un único archivo de 58.3 KB gzip que se auto-monta en una página ajena.
 
   **Puertos del proyecto:** backend 8090 · panel 5177 · widget 5178 · Postgres 5432.
+- **2026-07-24** — **BLOQUE 1 COMPLETO ✅** (1.1–1.5). Aislamiento por RLS verificado, autenticación JWT, alta self-service, panel con sesión y bitácora por negocio. Cuenta de trabajo local: `ana@patitas.test` / `secreta123`.
+- **2026-07-24** — **0.4 a medias**: repo local, CI y artefactos de despliegue listos; falta crear el repo en GitHub (`gh` no instalado) y `flyctl deploy` (provisiona recursos de pago, pendiente del visto bueno del usuario).

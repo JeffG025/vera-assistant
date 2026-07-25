@@ -1,64 +1,29 @@
-import { useEffect, useState } from 'react'
-
-const ETIQUETAS = {
-  UP: { texto: 'Operativo', clase: 'ok' },
-  DEGRADED: { texto: 'Degradado', clase: 'aviso' },
-  DOWN: { texto: 'Caído', clase: 'error' },
-}
+import { Navigate, Route, Routes } from 'react-router-dom'
+import RutaProtegida from './auth/RutaProtegida.jsx'
+import Layout from './componentes/Layout.jsx'
+import Ajustes from './paginas/Ajustes.jsx'
+import Login from './paginas/Login.jsx'
+import Panel from './paginas/Panel.jsx'
+import Registro from './paginas/Registro.jsx'
 
 export default function App() {
-  const [salud, setSalud] = useState(null)
-  const [error, setError] = useState(null)
-
-  useEffect(() => {
-    // Verifica de punta a punta que el proxy de Vite llega al backend.
-    fetch('/api/health')
-      .then((r) => r.json())
-      .then(setSalud)
-      .catch((e) => setError(e.message))
-  }, [])
-
-  const estado = salud ? (ETIQUETAS[salud.status] ?? ETIQUETAS.DOWN) : null
-
   return (
-    <main className="pagina">
-      <header className="encabezado">
-        <h1>Vera</h1>
-        <p>Plataforma multi-tenant de asistentes IA</p>
-      </header>
+    <Routes>
+      <Route path="/entrar" element={<Login />} />
+      <Route path="/registro" element={<Registro />} />
 
-      <section className="tarjeta">
-        <h2>Estado del sistema</h2>
+      <Route
+        element={
+          <RutaProtegida>
+            <Layout />
+          </RutaProtegida>
+        }
+      >
+        <Route path="/" element={<Panel />} />
+        <Route path="/ajustes" element={<Ajustes />} />
+      </Route>
 
-        {!salud && !error && <p className="tenue">Consultando el backend…</p>}
-
-        {error && (
-          <p className="tenue">
-            No se pudo contactar al backend: <code>{error}</code>
-          </p>
-        )}
-
-        {salud && (
-          <>
-            <p className={`estado ${estado.clase}`}>
-              <span className="punto" /> {estado.texto}
-            </p>
-            <dl className="datos">
-              <div>
-                <dt>PostgreSQL</dt>
-                <dd>{salud.postgres ?? '—'}</dd>
-              </div>
-              <div>
-                <dt>pgvector</dt>
-                <dd>{salud.pgvector ?? 'no instalado'}</dd>
-              </div>
-            </dl>
-            {salud.error && <p className="tenue">{salud.error}</p>}
-          </>
-        )}
-      </section>
-
-      <p className="pie">Bloque 0 — Cimientos</p>
-    </main>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   )
 }

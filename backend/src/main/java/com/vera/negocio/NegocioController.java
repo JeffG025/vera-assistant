@@ -26,14 +26,22 @@ public class NegocioController {
 
 	private final TenantRepository tenants;
 	private final AuthService auth;
+	private final AuditoriaService auditoria;
+	private final com.vera.dominio.AuditoriaRepository bitacora;
 
-	public NegocioController(TenantRepository tenants, AuthService auth) {
+	public NegocioController(TenantRepository tenants, AuthService auth, AuditoriaService auditoria,
+			com.vera.dominio.AuditoriaRepository bitacora) {
 		this.tenants = tenants;
 		this.auth = auth;
+		this.auditoria = auditoria;
+		this.bitacora = bitacora;
 	}
 
 	public record Datos(String id, String nombre, String slug, String plan, String estado, String clavePublica,
-			String dominiosPermitidos) {
+			String dominiosPermitidos, LimitesPlan limites) {
+	}
+
+	public record Movimiento(String accion, String detalle, String fecha) {
 	}
 
 	public record Cambios(@Size(max = 120) String nombre, String dominiosPermitidos) {
@@ -56,14 +64,28 @@ public class NegocioController {
 			negocio.setDominiosPermitidos(cambios.dominiosPermitidos().isBlank() ? null
 					: cambios.dominiosPermitidos().trim());
 		}
-		return mapear(tenants.save(negocio));
+		Datos guardado = mapear(tenants.save(negocio));
+		auditoria.registrar(usuario.tenantId(), usuario.id(), AuditoriaService.NEGOCIO_ACTUALIZADO,
+				guardado.nombre());
+		return guardado;
+	}
+
+	// La bitacora ya viene filtrada por RLS: solo se ve lo del propio negocio.
+	@GetMapping("/auditoria")
+	@PreAuthorize("hasRole('OWNER')")
+	public java.util.List<Movimiento> auditoria() {
+		return bitacora.findTop50ByOrderByCreadoEnDesc().stream()
+				.map(a -> new Movimiento(a.getAccion(), a.getDetalle(), a.getCreadoEn().toString()))
+				.toList();
 	}
 
 	// Rota la clave del widget: el script viejo deja de funcionar de inmediato.
 	@PostMapping("/clave-publica")
 	@PreAuthorize("hasRole('OWNER')")
 	public Map<String, String> regenerarClave(@AuthenticationPrincipal UsuarioAutenticado usuario) {
-		return Map.of("clavePublica", auth.regenerarClavePublica(usuario.tenantId()));
+		String clave = auth.regenerarClavePublica(usuario.tenantId());
+		auditoria.registrar(usuario.tenantId(), usuario.id(), AuditoriaService.CLAVE_REGENERADA, null);
+		return Map.of("clavePublica", clave);
 	}
 
 	private Tenant cargar(UsuarioAutenticado usuario) {
@@ -76,7 +98,8 @@ public class NegocioController {
 
 	private Datos mapear(Tenant t) {
 		return new Datos(t.getId().toString(), t.getNombre(), t.getSlug(), t.getPlan().name(),
-				t.getEstado().name(), t.getClavePublica(), t.getDominiosPermitidos());
+				t.getEstado().name(), t.getClavePublica(), t.getDominiosPermitidos(),
+				LimitesPlan.de(t.getPlan()));
 	}
 
 }
