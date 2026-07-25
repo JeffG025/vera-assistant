@@ -59,7 +59,7 @@ Sitio del cliente (cualquier web)
 |--|-------|-----------|:--:|:--:|
 | **0** | **Cimientos** | Monorepo, Spring Boot, Docker Compose (Postgres+pgvector), esquema base, CI | 1 | 🟡 |
 | **1** | **Núcleo multi-tenant** | Aislamiento de datos, auth JWT + roles, alta de inquilino, panel base | 2 | ✅ |
-| **2** | **Ingesta de conocimiento** | Fuentes (PDF/texto/URL), crawler, troceado, embeddings, panel de fuentes | 2 | ⬜ |
+| **2** | **Ingesta de conocimiento** | Fuentes (PDF/texto/URL), crawler, troceado, embeddings, panel de fuentes | 2 | 🟡 |
 | **3** | **Motor de respuesta (RAG)** | Recuperación híbrida, generación con citas, streaming, memoria, control de costo | 2 | ⬜ |
 | **4** | **Evaluación de calidad** | Golden set por inquilino, métricas de acierto y fidelidad, corrida en CI | 1 | ⬜ |
 | **5** | **Widget embebible** | Script de embebido, Shadow DOM, theming por inquilino, dominios permitidos | 1.5 | ⬜ |
@@ -158,16 +158,20 @@ Leyenda: ✅ hecho · 🟡 en curso · ⬜ pendiente
 - [x] Bitácora de acciones sensibles con RLS propio + `GET /api/negocio/auditoria` (solo OWNER)
 - [x] `CuotaService` con el punto único de corte por cuota
 - [x] Verificado: A ve sus 3 eventos y B solo el suyo; los conteos cuadran con la base
-- [ ] ⚠️ **Sin verificar todavía:** el corte por cuota. Nada consume cuota hasta las fuentes (bloque 2) y los mensajes (bloque 3)
+- [x] ✅ **Corte por cuota verificado en el incremento 2.1**: la cuarta fuente de un plan TRIAL (techo 3) responde 409, y borrar una libera el cupo
 
 ---
 
 ## Bloque 2 — Ingesta de conocimiento
 
-**Incremento 2.1 — Fuentes manuales** ⬜
-- [ ] Entidad `Source` (tipo, origen, estado de indexado, versión) por inquilino
-- [ ] Subida de PDF/TXT/MD + pegado de texto libre
-- [ ] Extracción de texto de PDF con manejo de archivos sin capa de texto
+**Incremento 2.1 — Fuentes manuales** ✅ (11 comprobaciones en verde)
+- [x] Entidad `Fuente` con tipo, origen, estado (PENDIENTE/PROCESANDO/LISTA/ERROR), caracteres y error, con RLS propio
+- [x] Subida de PDF/TXT/MD (techo 20 MB) + pegado de texto libre
+- [x] Extracción de PDF con PDFBox; un PDF sin capa de texto queda en ERROR con el motivo, no revienta
+- [x] `GET/POST/DELETE /api/fuentes` — alta para OWNER y AGENT, borrado solo OWNER
+- [x] Verificado con un PDF real (el protocolo de Belkis): **21 301 caracteres** extraídos
+- [x] Verificado: formato no soportado → 409; cuota TRIAL agotada a la cuarta → 409; borrar libera cupo
+- [x] Verificado: el negocio B no ve ninguna fuente del negocio A
 
 **Incremento 2.2 — Crawler del sitio** ⬜
 - [ ] Rastreo desde una URL: sitemap, respeto a `robots.txt`, límite de páginas y profundidad
@@ -326,4 +330,5 @@ Incrementos pequeños y **verificados** antes de avanzar. Trabajo **inline y fru
 
   **Puertos del proyecto:** backend 8090 · panel 5177 · widget 5178 · Postgres 5432.
 - **2026-07-24** — **BLOQUE 1 COMPLETO ✅** (1.1–1.5). Aislamiento por RLS verificado, autenticación JWT, alta self-service, panel con sesión y bitácora por negocio. Cuenta de trabajo local: `ana@patitas.test` / `secreta123`.
+- **2026-07-24** — **Incremento 2.1 ✅** — fuentes manuales (PDF/TXT/MD y texto pegado) con extracción real, estados y cuota aplicada. De paso quedó verificado el corte por cuota que el 1.5 había dejado pendiente.
 - **2026-07-24** — **0.4 a medias**: repo local, CI y artefactos de despliegue listos; falta crear el repo en GitHub (`gh` no instalado) y `flyctl deploy` (provisiona recursos de pago, pendiente del visto bueno del usuario).
