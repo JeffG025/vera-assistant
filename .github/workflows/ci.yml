@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend (Spring Boot)
+    runs-on: ubuntu-latest
+
+    # Postgres real con pgvector: las migraciones y las pruebas corren contra lo mismo que en local.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_DB: vera
+          POSTGRES_USER: vera
+          POSTGRES_PASSWORD: vera_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vera -d vera"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Compilar y probar
+        working-directory: backend
+        run: ./mvnw -B verify
+
+  frontend:
+    name: Frontend (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [admin, widget]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: ${{ matrix.app }}/package-lock.json
+      - name: Instalar
+        working-directory: ${{ matrix.app }}
+        run: npm ci
+      - name: Compilar
+        working-directory: ${{ matrix.app }}
+        run: npm run build

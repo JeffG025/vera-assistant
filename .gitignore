@@ -1,0 +1,24 @@
+# Entorno y secretos
+.env
+.env.local
+*.key
+
+# Java / Maven
+backend/target/
+*.class
+
+# Node
+node_modules/
+admin/dist/
+widget/dist/
+.vite/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Sistema y logs
+Thumbs.db
+.DS_Store
+*.log
