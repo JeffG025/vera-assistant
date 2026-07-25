@@ -2,6 +2,7 @@
 .env
 .env.local
 *.key
+application-local.properties
 
 # Java / Maven
 backend/target/

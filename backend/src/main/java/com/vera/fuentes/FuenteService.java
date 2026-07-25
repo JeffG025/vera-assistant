@@ -38,14 +38,16 @@ public class FuenteService {
 	private final TenantRepository tenants;
 	private final CuotaService cuotas;
 	private final RastreadorService rastreador;
+	private final IndexadorService indexador;
 
 	public FuenteService(FuenteRepository fuentes, DocumentoRepository documentos, TenantRepository tenants,
-			CuotaService cuotas, RastreadorService rastreador) {
+			CuotaService cuotas, RastreadorService rastreador, IndexadorService indexador) {
 		this.fuentes = fuentes;
 		this.documentos = documentos;
 		this.tenants = tenants;
 		this.cuotas = cuotas;
 		this.rastreador = rastreador;
+		this.indexador = indexador;
 	}
 
 	public record ResumenRastreo(int nuevas, int actualizadas, int sinCambio, int eliminadas) {
@@ -88,7 +90,9 @@ public class FuenteService {
 			if (pagina.texto().isBlank()) {
 				continue;
 			}
-			documentos.save(construir(tenantId, fuente.getId(), pagina.url(), pagina.titulo(), pagina.texto()));
+			indexador.indexar(
+					documentos.save(construir(tenantId, fuente.getId(), pagina.url(), pagina.titulo(),
+							pagina.texto())));
 			caracteres += pagina.texto().length();
 		}
 		return cerrar(fuente, (int) documentos.countByFuenteId(fuente.getId()), caracteres);
@@ -121,18 +125,18 @@ public class FuenteService {
 			String huella = huella(pagina.texto());
 
 			if (previo == null) {
-				documentos.save(construir(TenantContext.actual(), fuenteId, pagina.url(), pagina.titulo(),
-						pagina.texto()));
+				indexador.indexar(documentos.save(construir(TenantContext.actual(), fuenteId, pagina.url(),
+						pagina.titulo(), pagina.texto())));
 				nuevas++;
 			} else if (huella.equals(previo.getHash())) {
-				// Contenido idéntico: no se toca nada y en el 2.3 tampoco se reindexará.
+				// Contenido idéntico: ni se guarda ni se reindexa. Ahí está el ahorro de la huella.
 				sinCambio++;
 			} else {
 				previo.setTitulo(recortar(pagina.titulo(), 300));
 				previo.setContenido(pagina.texto());
 				previo.setHash(huella);
 				previo.setCaracteres(pagina.texto().length());
-				documentos.save(previo);
+				indexador.indexar(documentos.save(previo));
 				actualizadas++;
 			}
 		}
@@ -179,7 +183,7 @@ public class FuenteService {
 					? "el PDF no trae capa de texto: parece un escaneo, hará falta OCR"
 					: "el contenido llegó vacío");
 		}
-		documentos.save(construir(fuente.getTenantId(), fuente.getId(), url, titulo, limpio));
+		indexador.indexar(documentos.save(construir(fuente.getTenantId(), fuente.getId(), url, titulo, limpio)));
 		return cerrar(fuente, 1, limpio.length());
 	}
 

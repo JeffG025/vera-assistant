@@ -1,0 +1,6 @@
+# Copia este archivo como application-local.properties (mismo directorio) y pon tu clave.
+# Ese archivo esta en .gitignore y nunca se versiona.
+#
+# Clave de Google AI Studio (la misma que usa futbot sirve).
+# Sin ella la app arranca igual, pero usa embeddings locales que NO son semanticos.
+vera.gemini.api-key=TU_CLAVE_AQUI

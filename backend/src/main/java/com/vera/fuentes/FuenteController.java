@@ -28,9 +28,14 @@ import jakarta.validation.constraints.Size;
 public class FuenteController {
 
 	private final FuenteService fuentes;
+	private final IndexadorService indexador;
 
-	public FuenteController(FuenteService fuentes) {
+	public FuenteController(FuenteService fuentes, IndexadorService indexador) {
 		this.fuentes = fuentes;
+		this.indexador = indexador;
+	}
+
+	public record Consulta(@NotBlank String texto, Integer cuantos) {
 	}
 
 	public record Resumen(String id, String tipo, String nombre, String origen, String estado, int documentos,
@@ -77,6 +82,14 @@ public class FuenteController {
 	@PreAuthorize("hasAnyRole('OWNER','AGENT')")
 	public FuenteService.ResumenRastreo rastrear(@PathVariable UUID id) {
 		return fuentes.rastrearDeNuevo(id);
+	}
+
+	// Endpoint de depuración: muestra qué fragmentos recupera una pregunta y con qué distancia.
+	@PostMapping("/buscar")
+	public List<FragmentoDao.Resultado> buscar(@Valid @RequestBody Consulta consulta) {
+		int cuantos = consulta.cuantos() == null || consulta.cuantos() <= 0 ? 5
+				: Math.min(consulta.cuantos(), 20);
+		return indexador.buscar(consulta.texto(), cuantos);
 	}
 
 	@DeleteMapping("/{id}")

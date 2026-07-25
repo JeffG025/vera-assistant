@@ -69,6 +69,12 @@
 			<scope>runtime</scope>
 		</dependency>
 
+		<!-- Explicito: en Boot 4 llega solo en tiempo de ejecucion y aqui se usa para hablar con Gemini. -->
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+		</dependency>
+
 		<dependency>
 			<groupId>org.apache.pdfbox</groupId>
 			<artifactId>pdfbox</artifactId>

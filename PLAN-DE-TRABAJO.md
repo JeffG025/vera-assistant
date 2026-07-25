@@ -185,11 +185,17 @@ Leyenda: ✅ hecho · 🟡 en curso · ⬜ pendiente
 
 > 🐞 **Dos errores encadenados, cazados aquí:** el record del endpoint usaba `int` primitivo, así que omitir los campos opcionales reventaba el JSON. Y ese fallo de parseo **se disfrazaba de 401 "se requiere iniciar sesión"**, porque Spring reenvía a `/error` y ahí el filtro JWT ya no corre. Arreglado con `Integer` envuelto, `/error` en la lista abierta y un manejador que devuelve 400 con el motivo.
 
-**Incremento 2.3 — Troceado y embeddings** ⬜
-- [ ] Troceado con solape y respeto de encabezados; metadatos (título, URL, página)
-- [ ] Generación de embeddings por lotes con reintentos y control de límite de tasa
-- [ ] Almacenamiento en pgvector + índice HNSW
-- [ ] **Versión de índice:** reindexar no debe dejar al asistente sin servicio
+**Incremento 2.3 — Troceado y embeddings** 🟡 (pipeline verificado 6/6; falta probar Gemini de verdad)
+- [x] Troceado de 1000 con solape de 150, cortando por párrafos y frases, nunca a media palabra
+- [x] Cada fragmento guarda título y URL copiados del documento, para poder citar sin otro JOIN
+- [x] `ProveedorEmbeddings` intercambiable: Gemini (`text-embedding-004`, por lotes de 100, reintentos con espera creciente ante 429) o **embeddings locales** deterministas sin clave
+- [x] Almacenamiento en `vector(768)` con índice **HNSW** de distancia coseno; acceso por JDBC porque Hibernate no mapea `vector`
+- [x] Reindexado automático: al crear una fuente y, en el re-rastreo, **solo** los documentos que cambiaron
+- [x] `POST /api/fuentes/buscar` — endpoint de depuración que muestra fragmentos y distancias (adelanto del 3.1)
+- [x] Verificado: PDF de 21 301 caracteres → **25 trozos** de 744–1000 (media 952), ninguno se pasa del tope, y los 24 pares consecutivos solapan
+- [x] Verificado: la pregunta de envíos recupera la página de Envíos y la de precios la de Precios; el otro negocio no recupera nada
+- [ ] ⚠️ **Sin verificar:** la calidad **semántica**. Lo anterior se probó con embeddings locales de hashing, que reconocen palabras repetidas, no sinónimos. Pendiente: poner la clave en `application-local.properties` y repetir con Gemini
+- [ ] Versión de índice para reindexar sin dejar al asistente sin servicio
 
 **Incremento 2.4 — Panel de fuentes** ⬜
 - [ ] Lista con estado (pendiente/indexando/listo/error), progreso y conteo de fragmentos
@@ -339,4 +345,5 @@ Incrementos pequeños y **verificados** antes de avanzar. Trabajo **inline y fru
 - **2026-07-24** — **BLOQUE 1 COMPLETO ✅** (1.1–1.5). Aislamiento por RLS verificado, autenticación JWT, alta self-service, panel con sesión y bitácora por negocio. Cuenta de trabajo local: `ana@patitas.test` / `secreta123`.
 - **2026-07-24** — **Incremento 2.1 ✅** — fuentes manuales (PDF/TXT/MD y texto pegado) con extracción real, estados y cuota aplicada. De paso quedó verificado el corte por cuota que el 1.5 había dejado pendiente.
 - **2026-07-24** — **Incremento 2.2 ✅** — crawler con robots.txt, sitemap, limpieza de HTML y detección de cambios por huella. Se introdujo `documento` como unidad real de contenido (V7).
+- **2026-07-24** — **Incremento 2.3 🟡** — troceado con solape, embeddings intercambiables, pgvector con HNSW y reindexado solo de lo que cambió. El pipeline entero está verificado con embeddings locales; **falta repetirlo con Gemini** (clave en `application-local.properties`).
 - **2026-07-24** — **0.4 a medias**: repo local, CI y artefactos de despliegue listos; falta crear el repo en GitHub (`gh` no instalado) y `flyctl deploy` (provisiona recursos de pago, pendiente del visto bueno del usuario).
