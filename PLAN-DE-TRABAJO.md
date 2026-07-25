@@ -173,10 +173,17 @@ Leyenda: ✅ hecho · 🟡 en curso · ⬜ pendiente
 - [x] Verificado: formato no soportado → 409; cuota TRIAL agotada a la cuarta → 409; borrar libera cupo
 - [x] Verificado: el negocio B no ve ninguna fuente del negocio A
 
-**Incremento 2.2 — Crawler del sitio** ⬜
-- [ ] Rastreo desde una URL: sitemap, respeto a `robots.txt`, límite de páginas y profundidad
-- [ ] Limpieza de HTML (fuera menús, pies de página, scripts)
-- [ ] Re-rastreo programado con detección de cambios
+**Incremento 2.2 — Crawler del sitio** ✅ (15 comprobaciones en verde contra un sitio de prueba local)
+- [x] **Cambio de modelo:** una fuente ahora tiene N `documento` (un PDF = 1; un sitio = 1 por página). Los fragmentos del 2.3 colgarán de ahí. Migración V7 mudó el contenido que vivía en `fuente`
+- [x] Rastreo con frenos duros: mismo host, tope de 40 páginas y 3 niveles, 10 s por petición, 2 MB por página
+- [x] `robots.txt` respetado (grupo `User-agent: *`) y `sitemap.xml` usado como semilla
+- [x] Limpieza de HTML: fuera `script`, `style`, `nav`, `header`, `footer`, `aside`, `form`; se prefiere `main`/`article`
+- [x] Re-rastreo con huella SHA-256 por página: informa nuevas / actualizadas / sin cambio / eliminadas
+- [x] `POST /api/fuentes/sitio` y `POST /api/fuentes/{id}/rastrear`
+- [x] Verificado: 3 páginas indexadas, la vetada por robots **no**, menú y pie **fuera** del índice, contenido útil dentro
+- [x] Verificado: re-rastreo sin tocar nada → 3 sin cambio; tras editar un precio → 1 actualizada, 2 sin cambio
+
+> 🐞 **Dos errores encadenados, cazados aquí:** el record del endpoint usaba `int` primitivo, así que omitir los campos opcionales reventaba el JSON. Y ese fallo de parseo **se disfrazaba de 401 "se requiere iniciar sesión"**, porque Spring reenvía a `/error` y ahí el filtro JWT ya no corre. Arreglado con `Integer` envuelto, `/error` en la lista abierta y un manejador que devuelve 400 con el motivo.
 
 **Incremento 2.3 — Troceado y embeddings** ⬜
 - [ ] Troceado con solape y respeto de encabezados; metadatos (título, URL, página)
@@ -331,4 +338,5 @@ Incrementos pequeños y **verificados** antes de avanzar. Trabajo **inline y fru
   **Puertos del proyecto:** backend 8090 · panel 5177 · widget 5178 · Postgres 5432.
 - **2026-07-24** — **BLOQUE 1 COMPLETO ✅** (1.1–1.5). Aislamiento por RLS verificado, autenticación JWT, alta self-service, panel con sesión y bitácora por negocio. Cuenta de trabajo local: `ana@patitas.test` / `secreta123`.
 - **2026-07-24** — **Incremento 2.1 ✅** — fuentes manuales (PDF/TXT/MD y texto pegado) con extracción real, estados y cuota aplicada. De paso quedó verificado el corte por cuota que el 1.5 había dejado pendiente.
+- **2026-07-24** — **Incremento 2.2 ✅** — crawler con robots.txt, sitemap, limpieza de HTML y detección de cambios por huella. Se introdujo `documento` como unidad real de contenido (V7).
 - **2026-07-24** — **0.4 a medias**: repo local, CI y artefactos de despliegue listos; falta crear el repo en GitHub (`gh` no instalado) y `flyctl deploy` (provisiona recursos de pago, pendiente del visto bueno del usuario).

@@ -28,6 +28,13 @@ public class ManejadorErrores {
 		return ResponseEntity.badRequest().body(cuerpo);
 	}
 
+	// JSON ilegible: 400 con el motivo, en vez del reenvio a /error que confunde con un 401.
+	@ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+	public ResponseEntity<Map<String, Object>> ilegible(
+			org.springframework.http.converter.HttpMessageNotReadableException e) {
+		return ResponseEntity.badRequest().body(cuerpo("el cuerpo de la peticion no se pudo leer"));
+	}
+
 	// Choque contra un indice unico: es un conflicto de negocio, no un error 500.
 	@ExceptionHandler(DataIntegrityViolationException.class)
 	public ResponseEntity<Map<String, Object>> integridad(DataIntegrityViolationException e) {

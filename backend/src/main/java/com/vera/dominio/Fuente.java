@@ -43,8 +43,9 @@ public class Fuente {
 	@Column(nullable = false, length = 20)
 	private EstadoFuente estado = EstadoFuente.PENDIENTE;
 
-	@Column
-	private String contenido;
+	// Agregados de sus documentos, para no contarlos en cada listado.
+	@Column(nullable = false)
+	private int documentos;
 
 	@Column(nullable = false)
 	private int caracteres;

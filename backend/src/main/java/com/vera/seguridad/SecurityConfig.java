@@ -31,7 +31,9 @@ public class SecurityConfig {
 				.cors(Customizer.withDefaults())
 				.sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(reglas -> reglas
-						.requestMatchers("/api/health", "/api/auth/login", "/api/auth/refresco",
+						// /error va abierto: un JSON mal formado reenvía ahí sin filtro JWT y el
+						// error real se disfrazaría de 401 "se requiere iniciar sesion".
+						.requestMatchers("/error", "/api/health", "/api/auth/login", "/api/auth/refresco",
 								"/api/auth/registro")
 						.permitAll()
 						.anyRequest().authenticated())

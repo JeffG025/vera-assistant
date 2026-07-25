@@ -33,11 +33,15 @@ public class FuenteController {
 		this.fuentes = fuentes;
 	}
 
-	public record Resumen(String id, String tipo, String nombre, String origen, String estado, int caracteres,
-			String error, String creadoEn) {
+	public record Resumen(String id, String tipo, String nombre, String origen, String estado, int documentos,
+			int caracteres, String error, String creadoEn) {
 	}
 
 	public record TextoPegado(@NotBlank @Size(max = 200) String nombre, @NotBlank String texto) {
+	}
+
+	// Enteros envueltos, no primitivos: omitirlos en el JSON es legítimo y con `int` reventaría.
+	public record Sitio(@NotBlank String url, Integer maxPaginas, Integer profundidad) {
 	}
 
 	@GetMapping
@@ -59,6 +63,22 @@ public class FuenteController {
 		return ResponseEntity.status(HttpStatus.CREATED).body(mapear(creada));
 	}
 
+	@PostMapping("/sitio")
+	@PreAuthorize("hasAnyRole('OWNER','AGENT')")
+	public ResponseEntity<Resumen> desdeSitio(@Valid @RequestBody Sitio peticion) {
+		Fuente creada = fuentes.crearDesdeSitio(peticion.url(),
+				peticion.maxPaginas() == null ? 0 : peticion.maxPaginas(),
+				peticion.profundidad() == null ? 0 : peticion.profundidad());
+		return ResponseEntity.status(HttpStatus.CREATED).body(mapear(creada));
+	}
+
+	// Vuelve a leer el sitio y solo toca lo que cambió.
+	@PostMapping("/{id}/rastrear")
+	@PreAuthorize("hasAnyRole('OWNER','AGENT')")
+	public FuenteService.ResumenRastreo rastrear(@PathVariable UUID id) {
+		return fuentes.rastrearDeNuevo(id);
+	}
+
 	@DeleteMapping("/{id}")
 	@PreAuthorize("hasRole('OWNER')")
 	public ResponseEntity<Void> eliminar(@PathVariable UUID id) {
@@ -69,7 +89,8 @@ public class FuenteController {
 	// El contenido completo no se devuelve en la lista: puede pesar megas.
 	private static Resumen mapear(Fuente f) {
 		return new Resumen(f.getId().toString(), f.getTipo().name(), f.getNombre(), f.getOrigen(),
-				f.getEstado().name(), f.getCaracteres(), f.getError(), f.getCreadoEn().toString());
+				f.getEstado().name(), f.getDocumentos(), f.getCaracteres(), f.getError(),
+				f.getCreadoEn().toString());
 	}
 
 }
