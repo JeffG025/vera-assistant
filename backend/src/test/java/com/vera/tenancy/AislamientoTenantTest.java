@@ -110,6 +110,7 @@ class AislamientoTenantTest {
 		Tenant t = new Tenant();
 		t.setNombre(nombre);
 		t.setSlug(slug);
+		t.setClavePublica("pk_test_" + slug.replace("-", ""));
 		Tenant guardado = tenants.save(t);
 
 		Usuario u = new Usuario();

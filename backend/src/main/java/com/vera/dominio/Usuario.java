@@ -26,7 +26,8 @@ public class Usuario {
 	private UUID id;
 
 	// Null solo para usuarios de plataforma (SUPERADMIN), que no pertenecen a ningun negocio.
-	@ManyToOne(fetch = FetchType.LAZY)
+	// EAGER a proposito: el negocio se necesita en el login y al armar el token, siempre fuera de transaccion.
+	@ManyToOne(fetch = FetchType.EAGER)
 	@JoinColumn(name = "tenant_id")
 	private Tenant tenant;
 

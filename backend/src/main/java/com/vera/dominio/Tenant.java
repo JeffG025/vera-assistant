@@ -39,6 +39,13 @@ public class Tenant {
 	@Column(nullable = false, length = 20)
 	private EstadoTenant estado = EstadoTenant.ACTIVO;
 
+	// Viaja en el <script> del sitio del cliente: identifica al negocio, no autoriza el panel.
+	@Column(name = "clave_publica", nullable = false, length = 64, unique = true)
+	private String clavePublica;
+
+	@Column(name = "dominios_permitidos")
+	private String dominiosPermitidos;
+
 	@Column(name = "creado_en", nullable = false)
 	private OffsetDateTime creadoEn;
 
