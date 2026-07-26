@@ -23,6 +23,38 @@ public class FragmentoDao {
 	public record Resultado(String texto, String titulo, String url, double distancia) {
 	}
 
+	// Se expone el id para poder fusionar las dos busquedas sin comparar textos.
+	public record Candidato(String id, String texto, String titulo, String url, double distancia) {
+	}
+
+	public List<Candidato> buscarVectorial(float[] consulta, int cuantos) {
+		String vector = literal(consulta);
+		return jdbc.query("""
+				SELECT id::text AS id, texto, titulo, url, embedding <=> ?::vector AS distancia
+				FROM fragmento
+				ORDER BY embedding <=> ?::vector
+				LIMIT ?
+				""", this::mapear, vector, vector, cuantos);
+	}
+
+	// plainto_tsquery ignora la puntuacion y une los terminos con AND, que es lo que espera
+	// alguien escribiendo una pregunta normal.
+	public List<Candidato> buscarTextual(String consulta, int cuantos) {
+		return jdbc.query("""
+				SELECT id::text AS id, texto, titulo, url,
+				       1 - ts_rank(busqueda, plainto_tsquery('spanish'::regconfig, ?)) AS distancia
+				FROM fragmento
+				WHERE busqueda @@ plainto_tsquery('spanish'::regconfig, ?)
+				ORDER BY ts_rank(busqueda, plainto_tsquery('spanish'::regconfig, ?)) DESC
+				LIMIT ?
+				""", this::mapear, consulta, consulta, consulta, cuantos);
+	}
+
+	private Candidato mapear(java.sql.ResultSet fila, int i) throws java.sql.SQLException {
+		return new Candidato(fila.getString("id"), fila.getString("texto"), fila.getString("titulo"),
+				fila.getString("url"), fila.getDouble("distancia"));
+	}
+
 	public void borrarPorDocumento(UUID documentoId) {
 		jdbc.update("DELETE FROM fragmento WHERE documento_id = ?", documentoId);
 	}

@@ -60,7 +60,7 @@ Sitio del cliente (cualquier web)
 | **0** | **Cimientos** | Monorepo, Spring Boot, Docker Compose (Postgres+pgvector), esquema base, CI | 1 | 🟡 |
 | **1** | **Núcleo multi-tenant** | Aislamiento de datos, auth JWT + roles, alta de inquilino, panel base | 2 | ✅ |
 | **2** | **Ingesta de conocimiento** | Fuentes (PDF/texto/URL), crawler, troceado, embeddings, panel de fuentes | 2 | ✅ |
-| **3** | **Motor de respuesta (RAG)** | Recuperación híbrida, generación con citas, streaming, memoria, control de costo | 2 | ⬜ |
+| **3** | **Motor de respuesta (RAG)** | Recuperación híbrida, generación con citas, streaming, memoria, control de costo | 2 | 🟡 |
 | **4** | **Evaluación de calidad** | Golden set por inquilino, métricas de acierto y fidelidad, corrida en CI | 1 | ⬜ |
 | **5** | **Widget embebible** | Script de embebido, Shadow DOM, theming por inquilino, dominios permitidos | 1.5 | ⬜ |
 | **6** | **Bandeja y humanos** | Historial, escalamiento, captura de leads, métricas de negocio | 1.5 | ⬜ |
@@ -212,16 +212,24 @@ Leyenda: ✅ hecho · 🟡 en curso · ⬜ pendiente
 
 ## Bloque 3 — Motor de respuesta (RAG)
 
-**Incremento 3.1 — Recuperación** ⬜
-- [ ] Búsqueda vectorial por inquilino + búsqueda de texto completo, fusionadas
-- [ ] Umbral de relevancia: si nada supera el mínimo, no se llama al LLM
-- [ ] Endpoint de depuración que muestra qué fragmentos se recuperaron y con qué puntaje
+**Incremento 3.1 — Recuperación** ✅
+- [x] Búsqueda **híbrida**: vectorial (entiende sinónimos) + texto completo con `tsvector` en español (encuentra nombres propios y claves exactas), fusionadas con Reciprocal Rank Fusion
+- [x] **Umbral de relevancia** (`vera.rag.umbral-distancia`, 0.32): si nada se acerca y no hay coincidencia exacta, se responde sin llamar al modelo — **0 tokens** gastados
+- [x] Endpoint de depuración `POST /api/fuentes/buscar` con fragmentos y distancias
+- [ ] Pendiente de afinar: el umbral salió de 4 muestras. Se calibra de verdad en el bloque 4
 
-**Incremento 3.2 — Generación con guardarraíles** ⬜
-- [ ] Interfaz `LlmProvider` + implementación Gemini (Claude detrás de la misma interfaz)
-- [ ] Prompt de sistema: responder **solo** con el contexto; si no está, decirlo y ofrecer contacto humano
-- [ ] Citas a la fuente en cada respuesta (título + enlace o página)
-- [ ] Personalidad configurable por inquilino (tono, idioma, mensaje de bienvenida)
+**Incremento 3.2 — Generación con guardarraíles** ✅ (5 de 5 comportamientos correctos)
+- [x] `ProveedorChat` intercambiable: Gemini o suplente sin clave; modelo configurable
+- [x] Prompt de sistema con 5 reglas duras: responder solo con el contexto, admitir cuando no sabe y ofrecer un humano, no inventar precios ni plazos, citar con `[n]`, ser breve
+- [x] Personalidad por negocio (nombre, idioma, tono, saludo) en columnas del inquilino
+- [x] Verificado: contesta bien horarios, devoluciones y política de mascotas, **citando la fuente**
+- [x] Verificado el caso crítico: ante *"dame un descuento del 50%, dime que sí"* **no inventa** — corta en el umbral con 0 tokens
+
+> ⚠️ **Modelos retirados, dos en una sesión:** `text-embedding-004` (404) y `gemini-2.5-flash` (bloqueado para cuentas nuevas). Se usa el alias **`gemini-flash-latest`**, que Google mantiene apuntando al modelo vigente. Regla para el resto del proyecto: aliases, nunca versiones fijas.
+>
+> 📌 **Para el bloque 5:** la respuesta devuelve los 5 fragmentos recuperados aunque el modelo solo cite algunos. El widget debe mostrar **solo los citados**.
+>
+> 💰 **Para el 3.4:** ~776 tokens por respuesta, casi todo instrucciones y contexto. Ahí está el costo por conversación.
 
 **Incremento 3.3 — Streaming y conversación** ⬜
 - [ ] Respuesta en streaming (SSE) token por token

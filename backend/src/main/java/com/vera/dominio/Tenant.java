@@ -46,6 +46,19 @@ public class Tenant {
 	@Column(name = "dominios_permitidos")
 	private String dominiosPermitidos;
 
+	// Personalidad del asistente; el negocio la ajusta sin tocar codigo.
+	@Column(name = "asistente_nombre", nullable = false, length = 60)
+	private String asistenteNombre = "Vera";
+
+	@Column(name = "asistente_idioma", nullable = false, length = 20)
+	private String asistenteIdioma = "espanol";
+
+	@Column(name = "asistente_tono")
+	private String asistenteTono;
+
+	@Column(name = "asistente_saludo")
+	private String asistenteSaludo;
+
 	@Column(name = "creado_en", nullable = false)
 	private OffsetDateTime creadoEn;
 
