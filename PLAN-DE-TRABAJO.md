@@ -256,10 +256,12 @@ Leyenda: ✅ hecho · 🟡 en curso · ⬜ pendiente
 
 ## Bloque 4 — Evaluación de calidad *(el diferenciador)*
 
-**Incremento 4.1 — Golden set** ⬜
-- [ ] Entidad `EvalCase` por inquilino: pregunta + respuesta esperada + fuente esperada
-- [ ] Carga masiva desde CSV y creación desde conversaciones reales
-- [ ] 50 casos para el inquilino demo de mascotas
+**Incremento 4.1 — Golden set** ✅
+- [x] Entidad `CasoEval` por inquilino con RLS: pregunta, respuesta esperada, fuente esperada y **`debe_saber`**
+- [x] `debe_saber = false` marca los casos donde lo correcto es **admitir que no sabe**. Sin esos, el examen solo mide aciertos y jamás detecta cuando inventa
+- [x] API `GET/POST/DELETE /api/evaluacion/casos` + importación **CSV** (formato simple, armable en una hoja de cálculo)
+- [x] Verificado: 16 casos importados (11 positivos + 5 negativos) y el otro negocio ve **0**
+- [ ] Los 50 casos del plan quedan pendientes: el corpus demo son 3 documentos cortos. Se completa con los inquilinos demo del bloque 8
 
 **Incremento 4.2 — Corrida y métricas** ⬜
 - [ ] Ejecutar el set completo y registrar cada resultado
