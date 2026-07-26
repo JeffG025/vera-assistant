@@ -62,6 +62,46 @@ public class RagService {
 		return procesar(pregunta, conversacionId, alRecibir);
 	}
 
+	/**
+	 * Responde sin dejar rastro: sin caché, sin límite de tasa, sin cuota y sin guardar la
+	 * conversación. Lo usa la evaluación, que no debe ensuciar el consumo del negocio ni
+	 * medir respuestas cacheadas de una versión anterior del prompt.
+	 */
+	public Resultado responderSinRastro(String pregunta) {
+		Tenant negocio = tenants.findById(TenantContext.actual())
+				.orElseThrow(() -> ExcepcionNegocio.noEncontrado("negocio no encontrado"));
+
+		List<RecuperadorService.Recuperado> recuperados = recuperador.recuperar(pregunta, FRAGMENTOS);
+		if (recuperados.isEmpty()) {
+			return new Resultado(null, sinInformacion(negocio), List.of(), true, 0, "ninguno", pregunta);
+		}
+
+		ProveedorChat.Respuesta salida = chat.responder(instrucciones(negocio, numerar(recuperados)),
+				List.of(), pregunta);
+
+		List<Fuente> fuentes = new ArrayList<>();
+		for (int i = 0; i < recuperados.size(); i++) {
+			RecuperadorService.Recuperado r = recuperados.get(i);
+			fuentes.add(new Fuente(i + 1, r.titulo(), r.url(), r.distancia()));
+		}
+		return new Resultado(null, salida.texto(), fuentes, false, salida.tokens(), chat.modelo(), pregunta);
+	}
+
+	/** Juez de fidelidad: compara la respuesta obtenida contra la esperada. */
+	public String juzgar(String pregunta, String esperada, String obtenida) {
+		String sistema = """
+				Eres un evaluador estricto. Te doy una pregunta, la respuesta correcta y la respuesta
+				que dio un asistente. Decide si la respuesta del asistente dice lo mismo que la correcta
+				en el dato esencial. Ignora diferencias de redaccion, cortesia o citas.
+
+				Responde en una sola linea con este formato exacto:
+				SI|motivo breve   o   NO|motivo breve
+				""";
+		String entrada = "PREGUNTA: %s\nRESPUESTA CORRECTA: %s\nRESPUESTA DEL ASISTENTE: %s"
+				.formatted(pregunta, esperada, obtenida);
+		return chat.responder(sistema, List.of(), entrada).texto().strip();
+	}
+
 	private Resultado procesar(String pregunta, String conversacionId, Consumer<String> alRecibir) {
 		UUID inquilino = TenantContext.actual();
 		Tenant negocio = tenants.findById(inquilino)

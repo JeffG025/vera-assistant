@@ -263,10 +263,15 @@ Leyenda: ✅ hecho · 🟡 en curso · ⬜ pendiente
 - [x] Verificado: 16 casos importados (11 positivos + 5 negativos) y el otro negocio ve **0**
 - [ ] Los 50 casos del plan quedan pendientes: el corpus demo son 3 documentos cortos. Se completa con los inquilinos demo del bloque 8
 
-**Incremento 4.2 — Corrida y métricas** ⬜
-- [ ] Ejecutar el set completo y registrar cada resultado
-- [ ] Métricas: **acierto de recuperación** (¿trajo el fragmento correcto?), **fidelidad** (¿se apegó al contexto?), **cobertura** (¿cuántas dijo "no sé" de más?)
-- [ ] Juez automático con LLM + revisión manual de los dudosos
+**Incremento 4.2 — Corrida y métricas** 🟡 (mecanismo terminado; el examen completo no cabe en el free tier)
+- [x] Tablas `corrida_eval` y `resultado_eval` con RLS; cada corrida guarda aciertos **y base** por métrica
+- [x] `responderSinRastro`: la evaluación no usa caché, no gasta cuota y no ensucia las conversaciones del negocio
+- [x] Tres métricas: **recuperación** (¿trajo la fuente esperada?), **fidelidad** (juez con LLM contra la respuesta esperada) y **abstención** (¿calló cuando debía?)
+- [x] `POST/GET /api/evaluacion/corridas` + detalle caso por caso con el motivo del veredicto
+- [x] Un caso caído no tumba el examen: se marca y se sigue
+- [ ] **El free tier no aguanta el examen.** Con 12 s de pausa entre casos, 11 de 16 no llegaron a ejecutarse. Para una corrida completa hace falta clave de pago o un set más chico
+
+> 🔴 **El bug más grave del proyecto, y era mío:** la primera corrida reportó **100.00%** cuando 10 de 16 casos ni siquiera se ejecutaron — los excluía del denominador y calculaba sobre los 6 que sí corrieron. Un evaluador que miente es peor que no tener evaluador: te da confianza falsa justo donde ibas a apoyar tu argumento de venta. Ahora los errores entran al denominador y la corrida se marca `completa: false`.
 
 **Incremento 4.3 — Reporte y regresión** ⬜
 - [ ] Página de calidad en el panel: puntaje global e historial por corrida
