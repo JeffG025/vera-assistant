@@ -194,7 +194,8 @@ Leyenda: ✅ hecho · 🟡 en curso · ⬜ pendiente
 - [x] `POST /api/fuentes/buscar` — endpoint de depuración que muestra fragmentos y distancias (adelanto del 3.1)
 - [x] Verificado: PDF de 21 301 caracteres → **25 trozos** de 744–1000 (media 952), ninguno se pasa del tope, y los 24 pares consecutivos solapan
 - [x] Verificado: la pregunta de envíos recupera la página de Envíos y la de precios la de Precios; el otro negocio no recupera nada
-- [ ] ⚠️ **Sin verificar:** la calidad **semántica**. Lo anterior se probó con embeddings locales de hashing, que reconocen palabras repetidas, no sinónimos. Pendiente: poner la clave en `application-local.properties` y repetir con Gemini
+- [x] ✅ **Calidad semántica verificada con Gemini** (`gemini-embedding-001`, 768 dims pedidas explícitamente y normalizadas): 3 de 3 preguntas acertaron su tema **sin compartir una sola palabra** con el texto indexado ("¿cuánto me cobran por llevarlo hasta mi casa?" → Envíos, 0.273). La pregunta de control fuera del corpus quedó en 0.378, lejos de los aciertos (0.23–0.27) — ese hueco es el umbral de relevancia del 3.1
+- [x] `text-embedding-004` está retirado (404). Los modelos vivos son `gemini-embedding-001` y la familia `gemini-embedding-2`
 - [ ] Versión de índice para reindexar sin dejar al asistente sin servicio
 
 **Incremento 2.4 — Panel de fuentes** ⬜

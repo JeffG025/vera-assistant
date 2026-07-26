@@ -22,7 +22,9 @@ public class EmbeddingsGemini implements ProveedorEmbeddings {
 
 	private static final Logger log = LoggerFactory.getLogger(EmbeddingsGemini.class);
 
-	private static final String MODELO = "text-embedding-004";
+	// text-embedding-004 fue retirado: la API responde 404. Este devuelve 3072 dimensiones
+	// por defecto, asi que se piden 768 para que encajen con la columna vector(768).
+	private static final String MODELO = "gemini-embedding-001";
 	private static final String URL = "https://generativelanguage.googleapis.com/v1beta/models/"
 			+ MODELO + ":batchEmbedContents";
 	private static final int LOTE = 100;
@@ -57,6 +59,7 @@ public class EmbeddingsGemini implements ProveedorEmbeddings {
 		for (String texto : textos) {
 			ObjectNode peticion = peticiones.addObject();
 			peticion.put("model", "models/" + MODELO);
+			peticion.put("outputDimensionality", DIMENSIONES);
 			peticion.putObject("content").putArray("parts").addObject().put("text", texto);
 		}
 
@@ -108,9 +111,26 @@ public class EmbeddingsGemini implements ProveedorEmbeddings {
 			for (int i = 0; i < DIMENSIONES; i++) {
 				vector[i] = (float) valores.get(i).asDouble();
 			}
-			salida.add(vector);
+			salida.add(normalizar(vector));
 		}
 		return salida;
+	}
+
+	// Al recortar dimensiones el modelo ya no entrega el vector normalizado; se normaliza aqui
+	// para que las distancias sean estables y comparables entre lotes.
+	private float[] normalizar(float[] vector) {
+		double suma = 0;
+		for (float valor : vector) {
+			suma += valor * valor;
+		}
+		float norma = (float) Math.sqrt(suma);
+		if (norma == 0) {
+			return vector;
+		}
+		for (int i = 0; i < vector.length; i++) {
+			vector[i] /= norma;
+		}
+		return vector;
 	}
 
 }
