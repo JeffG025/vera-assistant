@@ -231,10 +231,13 @@ Leyenda: ✅ hecho · 🟡 en curso · ⬜ pendiente
 >
 > 💰 **Para el 3.4:** ~776 tokens por respuesta, casi todo instrucciones y contexto. Ahí está el costo por conversación.
 
-**Incremento 3.3 — Streaming y conversación** ⬜
-- [ ] Respuesta en streaming (SSE) token por token
-- [ ] Sesiones y memoria de conversación con ventana acotada
-- [ ] Reescritura de la pregunta con contexto previo ("¿y ese cuánto cuesta?")
+**Incremento 3.3 — Streaming y conversación** ✅ (verificado end-to-end)
+- [x] Tablas `conversacion` y `mensaje` con RLS propio; cada turno guarda tokens y si quedó sin respuesta
+- [x] Memoria de **ventana acotada** (últimos 8 mensajes): mandar el hilo entero encarece cada turno sin mejorarlo
+- [x] **Reescritura de la repregunta** antes de buscar, con reserva a la pregunta original si falla
+- [x] `POST /api/chat/stream` con SSE sobre hilos virtuales; el inquilino se pasa a mano al hilo nuevo porque no lo hereda
+- [x] Verificado: *"y necesita traer algo especial?"* → reescrito a *"¿Mi gato necesita traer algo especial a la tienda?"* y respondido bien
+- [x] Verificado: SSE entrega el texto por pedazos y cierra con un evento final que trae fuentes, tokens y modelo
 
 **Incremento 3.4 — Costo y abuso** ⬜
 - [ ] Medidor de tokens y costo estimado por inquilino y por conversación

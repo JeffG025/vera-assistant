@@ -1,9 +1,17 @@
 package com.vera.rag;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
+import java.util.function.Consumer;
 
 import org.springframework.stereotype.Service;
 
+import com.vera.dominio.Conversacion;
+import com.vera.dominio.ConversacionRepository;
+import com.vera.dominio.Mensaje;
+import com.vera.dominio.MensajeRepository;
 import com.vera.dominio.Tenant;
 import com.vera.dominio.TenantRepository;
 import com.vera.error.ExcepcionNegocio;
@@ -17,41 +25,133 @@ public class RagService {
 	private final RecuperadorService recuperador;
 	private final ProveedorChat chat;
 	private final TenantRepository tenants;
+	private final ConversacionRepository conversaciones;
+	private final MensajeRepository mensajes;
 
-	public RagService(RecuperadorService recuperador, ProveedorChat chat, TenantRepository tenants) {
+	public RagService(RecuperadorService recuperador, ProveedorChat chat, TenantRepository tenants,
+			ConversacionRepository conversaciones, MensajeRepository mensajes) {
 		this.recuperador = recuperador;
 		this.chat = chat;
 		this.tenants = tenants;
+		this.conversaciones = conversaciones;
+		this.mensajes = mensajes;
 	}
 
 	public record Fuente(int numero, String titulo, String url, double distancia) {
 	}
 
-	public record Resultado(String respuesta, List<Fuente> fuentes, boolean sinInformacion, int tokens,
-			String modelo) {
+	public record Resultado(String conversacionId, String respuesta, List<Fuente> fuentes,
+			boolean sinInformacion, int tokens, String modelo, String consultaUsada) {
 	}
 
-	public Resultado responder(String pregunta) {
+	public Resultado responder(String pregunta, String conversacionId) {
+		return procesar(pregunta, conversacionId, null);
+	}
+
+	public Resultado responderEnStream(String pregunta, String conversacionId, Consumer<String> alRecibir) {
+		return procesar(pregunta, conversacionId, alRecibir);
+	}
+
+	private Resultado procesar(String pregunta, String conversacionId, Consumer<String> alRecibir) {
 		Tenant negocio = tenants.findById(TenantContext.actual())
 				.orElseThrow(() -> ExcepcionNegocio.noEncontrado("negocio no encontrado"));
+		Conversacion conversacion = resolver(conversacionId);
 
-		List<RecuperadorService.Recuperado> recuperados = recuperador.recuperar(pregunta, FRAGMENTOS);
+		List<Mensaje> previos = historial(conversacion.getId());
+		guardar(conversacion, "USUARIO", pregunta, 0, false);
 
-		// Nada relevante: se responde sin gastar una sola llamada al modelo. Es la defensa
-		// mas barata contra inventar, y ademas ahorra dinero en cada pregunta fuera de tema.
+		// "¿y ese cuánto cuesta?" no se puede buscar tal cual: sin el hilo previo no significa nada.
+		String consulta = previos.isEmpty() ? pregunta : reescribir(pregunta, previos);
+
+		List<RecuperadorService.Recuperado> recuperados = recuperador.recuperar(consulta, FRAGMENTOS);
+
+		// Nada relevante: se responde sin gastar una sola llamada al modelo. Es la defensa mas
+		// barata contra inventar y ademas ahorra dinero en cada pregunta fuera de tema.
 		if (recuperados.isEmpty()) {
-			return new Resultado(sinInformacion(negocio), List.of(), true, 0, "ninguno");
+			String texto = sinInformacion(negocio);
+			if (alRecibir != null) {
+				alRecibir.accept(texto);
+			}
+			guardar(conversacion, "ASISTENTE", texto, 0, true);
+			return new Resultado(conversacion.getId().toString(), texto, List.of(), true, 0, "ninguno", consulta);
 		}
 
-		String contexto = numerar(recuperados);
-		ProveedorChat.Respuesta salida = chat.responder(instrucciones(negocio, contexto), pregunta);
+		String instrucciones = instrucciones(negocio, numerar(recuperados));
+		List<ProveedorChat.Turno> turnos = aTurnos(previos);
+		ProveedorChat.Respuesta salida = alRecibir == null
+				? chat.responder(instrucciones, turnos, pregunta)
+				: chat.responderEnStream(instrucciones, turnos, pregunta, alRecibir);
 
-		List<Fuente> fuentes = new java.util.ArrayList<>();
+		guardar(conversacion, "ASISTENTE", salida.texto(), salida.tokens(), false);
+		conversaciones.save(conversacion);
+
+		List<Fuente> fuentes = new ArrayList<>();
 		for (int i = 0; i < recuperados.size(); i++) {
 			RecuperadorService.Recuperado r = recuperados.get(i);
 			fuentes.add(new Fuente(i + 1, r.titulo(), r.url(), r.distancia()));
 		}
-		return new Resultado(salida.texto(), fuentes, false, salida.tokens(), chat.modelo());
+		return new Resultado(conversacion.getId().toString(), salida.texto(), fuentes, false,
+				salida.tokens(), chat.modelo(), consulta);
+	}
+
+	private Conversacion resolver(String id) {
+		if (id != null && !id.isBlank()) {
+			return conversaciones.findById(UUID.fromString(id))
+					.orElseThrow(() -> ExcepcionNegocio.noEncontrado("conversacion no encontrada"));
+		}
+		Conversacion nueva = new Conversacion();
+		nueva.setTenantId(TenantContext.actual());
+		nueva.setCanal("PANEL");
+		return conversaciones.save(nueva);
+	}
+
+	private List<Mensaje> historial(UUID conversacionId) {
+		List<Mensaje> ultimos = new ArrayList<>(mensajes.findTop8ByConversacionIdOrderByCreadoEnDesc(conversacionId));
+		Collections.reverse(ultimos);
+		return ultimos;
+	}
+
+	private List<ProveedorChat.Turno> aTurnos(List<Mensaje> previos) {
+		List<ProveedorChat.Turno> turnos = new ArrayList<>();
+		for (Mensaje m : previos) {
+			turnos.add(new ProveedorChat.Turno("USUARIO".equals(m.getRol()) ? "user" : "model", m.getTexto()));
+		}
+		return turnos;
+	}
+
+	private void guardar(Conversacion conversacion, String rol, String texto, int tokens, boolean sinInfo) {
+		Mensaje mensaje = new Mensaje();
+		mensaje.setTenantId(conversacion.getTenantId());
+		mensaje.setConversacionId(conversacion.getId());
+		mensaje.setRol(rol);
+		mensaje.setTexto(texto);
+		mensaje.setTokens(tokens);
+		mensaje.setSinInformacion(sinInfo);
+		mensajes.save(mensaje);
+	}
+
+	// Una llamada extra al modelo, corta y barata, que evita recuperar basura en las repreguntas.
+	private String reescribir(String pregunta, List<Mensaje> previos) {
+		try {
+			StringBuilder hilo = new StringBuilder();
+			for (Mensaje m : previos.subList(Math.max(0, previos.size() - 4), previos.size())) {
+				hilo.append("USUARIO".equals(m.getRol()) ? "Cliente: " : "Asistente: ")
+						.append(m.getTexto()).append("\n");
+			}
+			String sistema = """
+					Reescribe la ultima pregunta del cliente para que se entienda por si sola,
+					sin necesitar el historial. Conserva el idioma y no agregues informacion nueva.
+					Devuelve UNICAMENTE la pregunta reescrita, sin comillas ni explicaciones.
+
+					HISTORIAL:
+					%s
+					""".formatted(hilo.toString().strip());
+			String reescrita = chat.responder(sistema, List.of(), pregunta).texto().strip();
+			return reescrita.isBlank() ? pregunta : reescrita;
+		} catch (RuntimeException e) {
+			// Si la reescritura falla, se busca con la pregunta original: peor recuperacion, no un error.
+			return pregunta;
+		}
 	}
 
 	private String numerar(List<RecuperadorService.Recuperado> recuperados) {
