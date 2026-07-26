@@ -12,8 +12,11 @@ import java.util.stream.Stream;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.http.HttpStatus;
+
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.vera.error.ExcepcionNegocio;
 
 public class ChatGemini implements ProveedorChat {
 
@@ -110,12 +113,29 @@ public class ChatGemini implements ProveedorChat {
 					.POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(cuerpo)))
 					.build();
 
-			HttpResponse<T> respuesta = http.send(peticion, manejador);
-			if (respuesta.statusCode() >= 400) {
+			// El free tier corta por minuto. Reintentos cortos: alguien esperando en un chat no
+			// aguanta esperas largas, pero un respiro de un segundo salva la mayoria de los topes.
+			long espera = 700;
+			for (int intento = 1; intento <= 3; intento++) {
+				HttpResponse<T> respuesta = http.send(peticion, manejador);
+				int codigo = respuesta.statusCode();
+
+				if (codigo < 400) {
+					return respuesta;
+				}
+				if ((codigo == 429 || codigo >= 500) && intento < 3) {
+					Thread.sleep(espera);
+					espera *= 2;
+					continue;
+				}
+				if (codigo == 429) {
+					throw new ExcepcionNegocio(HttpStatus.SERVICE_UNAVAILABLE,
+							"el asistente esta saturado en este momento; intenta de nuevo en unos segundos");
+				}
 				throw new IllegalStateException(
-						"Gemini respondio " + respuesta.statusCode() + " con el modelo " + modelo);
+						"Gemini respondio " + codigo + " con el modelo " + modelo);
 			}
-			return respuesta;
+			throw new IllegalStateException("Gemini no respondio tras 3 intentos");
 		} catch (IOException e) {
 			throw new IllegalStateException("fallo de red al hablar con Gemini: " + e.getMessage(), e);
 		} catch (InterruptedException e) {

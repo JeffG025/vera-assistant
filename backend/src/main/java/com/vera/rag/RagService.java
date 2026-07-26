@@ -27,14 +27,24 @@ public class RagService {
 	private final TenantRepository tenants;
 	private final ConversacionRepository conversaciones;
 	private final MensajeRepository mensajes;
+	private final com.vera.negocio.CuotaService cuotas;
+	private final com.vera.negocio.UsoService uso;
+	private final CacheRespuestas cache;
+	private final LimitadorTasa limitador;
 
 	public RagService(RecuperadorService recuperador, ProveedorChat chat, TenantRepository tenants,
-			ConversacionRepository conversaciones, MensajeRepository mensajes) {
+			ConversacionRepository conversaciones, MensajeRepository mensajes,
+			com.vera.negocio.CuotaService cuotas, com.vera.negocio.UsoService uso,
+			CacheRespuestas cache, LimitadorTasa limitador) {
 		this.recuperador = recuperador;
 		this.chat = chat;
 		this.tenants = tenants;
 		this.conversaciones = conversaciones;
 		this.mensajes = mensajes;
+		this.cuotas = cuotas;
+		this.uso = uso;
+		this.cache = cache;
+		this.limitador = limitador;
 	}
 
 	public record Fuente(int numero, String titulo, String url, double distancia) {
@@ -53,8 +63,23 @@ public class RagService {
 	}
 
 	private Resultado procesar(String pregunta, String conversacionId, Consumer<String> alRecibir) {
-		Tenant negocio = tenants.findById(TenantContext.actual())
+		UUID inquilino = TenantContext.actual();
+		Tenant negocio = tenants.findById(inquilino)
 				.orElseThrow(() -> ExcepcionNegocio.noEncontrado("negocio no encontrado"));
+
+		limitador.exigirCupo(inquilino.toString());
+		cuotas.exigirMensajesDisponibles(negocio.getPlan(), (int) uso.preguntasDelMes());
+
+		boolean primerTurno = conversacionId == null || conversacionId.isBlank();
+
+		// El caché solo aplica al primer turno: con historial la respuesta depende del hilo.
+		if (primerTurno) {
+			var guardada = cache.buscar(inquilino, pregunta);
+			if (guardada.isPresent()) {
+				return desdeCache(guardada.get(), pregunta, alRecibir);
+			}
+		}
+
 		Conversacion conversacion = resolver(conversacionId);
 
 		List<Mensaje> previos = historial(conversacion.getId());
@@ -73,6 +98,9 @@ public class RagService {
 				alRecibir.accept(texto);
 			}
 			guardar(conversacion, "ASISTENTE", texto, 0, true);
+			if (primerTurno) {
+				cache.guardar(inquilino, pregunta, new CacheRespuestas.Guardada(texto, List.of(), true));
+			}
 			return new Resultado(conversacion.getId().toString(), texto, List.of(), true, 0, "ninguno", consulta);
 		}
 
@@ -90,8 +118,25 @@ public class RagService {
 			RecuperadorService.Recuperado r = recuperados.get(i);
 			fuentes.add(new Fuente(i + 1, r.titulo(), r.url(), r.distancia()));
 		}
+		if (primerTurno) {
+			cache.guardar(inquilino, pregunta, new CacheRespuestas.Guardada(salida.texto(), fuentes, false));
+		}
 		return new Resultado(conversacion.getId().toString(), salida.texto(), fuentes, false,
 				salida.tokens(), chat.modelo(), consulta);
+	}
+
+	// Un acierto de caché ahorra la llamada al modelo, no la contabilidad: la conversación
+	// y sus mensajes se crean igual, con 0 tokens porque de verdad no se gastó ninguno.
+	private Resultado desdeCache(CacheRespuestas.Guardada guardada, String pregunta,
+			Consumer<String> alRecibir) {
+		Conversacion conversacion = resolver(null);
+		guardar(conversacion, "USUARIO", pregunta, 0, false);
+		guardar(conversacion, "ASISTENTE", guardada.respuesta(), 0, guardada.sinInformacion());
+		if (alRecibir != null) {
+			alRecibir.accept(guardada.respuesta());
+		}
+		return new Resultado(conversacion.getId().toString(), guardada.respuesta(), guardada.fuentes(),
+				guardada.sinInformacion(), 0, "cache", pregunta);
 	}
 
 	private Conversacion resolver(String id) {

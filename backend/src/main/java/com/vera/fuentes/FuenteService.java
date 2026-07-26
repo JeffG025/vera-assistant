@@ -39,15 +39,18 @@ public class FuenteService {
 	private final CuotaService cuotas;
 	private final RastreadorService rastreador;
 	private final IndexadorService indexador;
+	private final com.vera.rag.CacheRespuestas cache;
 
 	public FuenteService(FuenteRepository fuentes, DocumentoRepository documentos, TenantRepository tenants,
-			CuotaService cuotas, RastreadorService rastreador, IndexadorService indexador) {
+			CuotaService cuotas, RastreadorService rastreador, IndexadorService indexador,
+			com.vera.rag.CacheRespuestas cache) {
 		this.fuentes = fuentes;
 		this.documentos = documentos;
 		this.tenants = tenants;
 		this.cuotas = cuotas;
 		this.rastreador = rastreador;
 		this.indexador = indexador;
+		this.cache = cache;
 	}
 
 	public record ResumenRastreo(int nuevas, int actualizadas, int sinCambio, int eliminadas) {
@@ -158,6 +161,8 @@ public class FuenteService {
 				.orElseThrow(() -> ExcepcionNegocio.noEncontrado("fuente no encontrada"));
 		// Los documentos se van solos: la llave foránea tiene ON DELETE CASCADE.
 		fuentes.delete(fuente);
+		// Las respuestas cacheadas se apoyaban en esta fuente: ya no valen.
+		cache.invalidar(fuente.getTenantId());
 	}
 
 	// El cupo se cuenta sobre lo que RLS deja ver, o sea las fuentes de este negocio.
@@ -206,6 +211,8 @@ public class FuenteService {
 		if (cuantosDocumentos == 0 && fuente.getError() == null) {
 			fuente.setError("no se obtuvo contenido");
 		}
+		// Entró conocimiento nuevo: las respuestas cacheadas pueden haber quedado incompletas.
+		cache.invalidar(fuente.getTenantId());
 		return fuentes.save(fuente);
 	}
 

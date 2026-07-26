@@ -60,7 +60,7 @@ Sitio del cliente (cualquier web)
 | **0** | **Cimientos** | Monorepo, Spring Boot, Docker Compose (Postgres+pgvector), esquema base, CI | 1 | 🟡 |
 | **1** | **Núcleo multi-tenant** | Aislamiento de datos, auth JWT + roles, alta de inquilino, panel base | 2 | ✅ |
 | **2** | **Ingesta de conocimiento** | Fuentes (PDF/texto/URL), crawler, troceado, embeddings, panel de fuentes | 2 | ✅ |
-| **3** | **Motor de respuesta (RAG)** | Recuperación híbrida, generación con citas, streaming, memoria, control de costo | 2 | 🟡 |
+| **3** | **Motor de respuesta (RAG)** | Recuperación híbrida, generación con citas, streaming, memoria, control de costo | 2 | ✅ |
 | **4** | **Evaluación de calidad** | Golden set por inquilino, métricas de acierto y fidelidad, corrida en CI | 1 | ⬜ |
 | **5** | **Widget embebible** | Script de embebido, Shadow DOM, theming por inquilino, dominios permitidos | 1.5 | ⬜ |
 | **6** | **Bandeja y humanos** | Historial, escalamiento, captura de leads, métricas de negocio | 1.5 | ⬜ |
@@ -239,10 +239,18 @@ Leyenda: ✅ hecho · 🟡 en curso · ⬜ pendiente
 - [x] Verificado: *"y necesita traer algo especial?"* → reescrito a *"¿Mi gato necesita traer algo especial a la tienda?"* y respondido bien
 - [x] Verificado: SSE entrega el texto por pedazos y cierra con un evento final que trae fuentes, tokens y modelo
 
-**Incremento 3.4 — Costo y abuso** ⬜
-- [ ] Medidor de tokens y costo estimado por inquilino y por conversación
-- [ ] Límite de tasa por IP y por clave pública; caché de preguntas frecuentes
-- [ ] Corte al agotar la cuota del plan
+**Incremento 3.4 — Costo y abuso** ✅
+- [x] Consumo calculado **sumando los mensajes reales**, sin contadores paralelos que se desincronicen; índice por inquilino y fecha para que salga barato
+- [x] `GET /api/negocio/uso`: preguntas y tokens del mes contra el tope del plan, preguntas sin respuesta y **costo estimado en USD**
+- [x] Límite de tasa por ventana deslizante en memoria (20/min por inquilino, configurable)
+- [x] Caché de preguntas repetidas **solo en el primer turno** — con historial la respuesta depende del hilo — e invalidado al cambiar las fuentes
+- [x] Corte por cuota mensual antes de gastar una sola llamada
+- [x] Verificado: la misma pregunta dos veces → segunda con `modelo: cache` y **0 tokens**, respuesta idéntica y conversación nueva
+- [x] Verificado: 25 preguntas seguidas → 429 con mensaje claro; uso del mes reportando 5 preguntas, 3 454 tokens y USD 0.001
+
+> 🐞 **Hueco encontrado probando:** en una ráfaga, Gemini devolvía **429 propio** y el visitante veía un **500**. El cliente de embeddings reintentaba pero el de chat no. Ahora reintenta con espera creciente y, si aun así falla, responde **503 con un mensaje entendible**. Verificado: 14 preguntas seguidas, 14 respuestas correctas, cero 500.
+
+### ✅ BLOQUE 3 (Motor de respuesta) COMPLETO — 3.1 a 3.4
 
 ---
 

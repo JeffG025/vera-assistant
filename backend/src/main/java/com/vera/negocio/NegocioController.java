@@ -28,13 +28,15 @@ public class NegocioController {
 	private final AuthService auth;
 	private final AuditoriaService auditoria;
 	private final com.vera.dominio.AuditoriaRepository bitacora;
+	private final UsoService usoService;
 
 	public NegocioController(TenantRepository tenants, AuthService auth, AuditoriaService auditoria,
-			com.vera.dominio.AuditoriaRepository bitacora) {
+			com.vera.dominio.AuditoriaRepository bitacora, UsoService usoService) {
 		this.tenants = tenants;
 		this.auth = auth;
 		this.auditoria = auditoria;
 		this.bitacora = bitacora;
+		this.usoService = usoService;
 	}
 
 	public record Datos(String id, String nombre, String slug, String plan, String estado, String clavePublica,
@@ -71,6 +73,11 @@ public class NegocioController {
 	}
 
 	// La bitacora ya viene filtrada por RLS: solo se ve lo del propio negocio.
+	@GetMapping("/uso")
+	public UsoService.Uso uso(@AuthenticationPrincipal UsuarioAutenticado usuario) {
+		return usoService.calcular(cargar(usuario).getPlan());
+	}
+
 	@GetMapping("/auditoria")
 	@PreAuthorize("hasRole('OWNER')")
 	public java.util.List<Movimiento> auditoria() {
