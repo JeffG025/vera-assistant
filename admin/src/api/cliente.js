@@ -53,7 +53,11 @@ async function intentarRefrescar(refresco) {
 
 export async function peticion(ruta, opciones = {}, reintentar = true) {
   const sesion = leerSesion()
-  const cabeceras = { 'Content-Type': 'application/json', ...(opciones.headers ?? {}) }
+  const esFormulario = opciones.body instanceof FormData
+  // Con FormData el navegador pone el Content-Type con su boundary; fijarlo a mano rompe la subida.
+  const cabeceras = esFormulario
+    ? { ...(opciones.headers ?? {}) }
+    : { 'Content-Type': 'application/json', ...(opciones.headers ?? {}) }
   if (sesion?.acceso) cabeceras.Authorization = `Bearer ${sesion.acceso}`
 
   const respuesta = await fetch(BASE + ruta, { ...opciones, headers: cabeceras })
@@ -78,4 +82,16 @@ export const api = {
   actualizarNegocio: (datos) => peticion('/negocio', { method: 'PATCH', body: JSON.stringify(datos) }),
   regenerarClave: () => peticion('/negocio/clave-publica', { method: 'POST' }),
   salud: () => peticion('/health'),
+
+  fuentes: () => peticion('/fuentes'),
+  fuenteTexto: (datos) => peticion('/fuentes/texto', { method: 'POST', body: JSON.stringify(datos) }),
+  fuenteSitio: (datos) => peticion('/fuentes/sitio', { method: 'POST', body: JSON.stringify(datos) }),
+  fuenteArchivo: (archivo) => {
+    const cuerpo = new FormData()
+    cuerpo.append('archivo', archivo)
+    return peticion('/fuentes/archivo', { method: 'POST', body: cuerpo })
+  },
+  rastrearDeNuevo: (id) => peticion(`/fuentes/${id}/rastrear`, { method: 'POST' }),
+  fragmentosDe: (id) => peticion(`/fuentes/${id}/fragmentos`),
+  borrarFuente: (id) => peticion(`/fuentes/${id}`, { method: 'DELETE' }),
 }

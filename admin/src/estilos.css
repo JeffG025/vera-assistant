@@ -309,6 +309,106 @@ input:disabled {
   font-size: 0.85rem;
 }
 
+/* ---------- Fuentes ---------- */
+
+textarea {
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--borde);
+  background: var(--fondo);
+  color: var(--texto);
+  font: inherit;
+  resize: vertical;
+}
+
+textarea:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+
+input[type='file'] {
+  padding: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.listado {
+  margin-top: 1.25rem;
+}
+
+.fila {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-top: 1px solid var(--borde);
+  padding: 1rem 0;
+}
+
+.fila-datos {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 15rem;
+  flex: 1;
+}
+
+.fila-acciones {
+  display: flex;
+  gap: 0.9rem;
+  align-items: center;
+}
+
+.boton-texto.peligro {
+  color: var(--error);
+}
+
+.insignia {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--tenue);
+  vertical-align: middle;
+}
+
+.insignia.ok {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+.insignia.aviso {
+  color: var(--aviso);
+  border-color: var(--aviso);
+}
+.insignia.error {
+  color: var(--error);
+  border-color: var(--error);
+}
+
+.trozos {
+  flex-basis: 100%;
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+  max-height: 22rem;
+  overflow-y: auto;
+}
+
+.trozo {
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 0.5rem;
+  padding: 0.65rem 0.8rem;
+}
+
+.trozo p {
+  margin: 0.3rem 0 0;
+  font-size: 0.85rem;
+  color: var(--texto);
+}
+
 @media (max-width: 46rem) {
   .marco {
     grid-template-columns: 1fr;

@@ -48,6 +48,23 @@ public class FragmentoDao {
 				vector, vector, cuantos);
 	}
 
+	// Vista previa para el panel: deja ver como quedo troceado el documento.
+	public List<Trozo> porFuente(UUID fuenteId, int limite) {
+		return jdbc.query("""
+				SELECT orden, titulo, url, left(texto, 400) AS extracto, length(texto) AS largo
+				FROM fragmento
+				WHERE fuente_id = ?
+				ORDER BY documento_id, orden
+				LIMIT ?
+				""",
+				(fila, i) -> new Trozo(fila.getInt("orden"), fila.getString("titulo"), fila.getString("url"),
+						fila.getString("extracto"), fila.getInt("largo")),
+				fuenteId, limite);
+	}
+
+	public record Trozo(int orden, String titulo, String url, String extracto, int largo) {
+	}
+
 	public long contar() {
 		Long total = jdbc.queryForObject("SELECT count(*) FROM fragmento", Long.class);
 		return total == null ? 0 : total;

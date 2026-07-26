@@ -16,6 +16,7 @@ export default function Layout() {
           <NavLink to="/" end>
             Panel
           </NavLink>
+          <NavLink to="/fuentes">Fuentes</NavLink>
           <NavLink to="/ajustes">Ajustes</NavLink>
         </nav>
 

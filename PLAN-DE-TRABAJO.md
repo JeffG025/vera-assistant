@@ -59,7 +59,7 @@ Sitio del cliente (cualquier web)
 |--|-------|-----------|:--:|:--:|
 | **0** | **Cimientos** | Monorepo, Spring Boot, Docker Compose (Postgres+pgvector), esquema base, CI | 1 | 🟡 |
 | **1** | **Núcleo multi-tenant** | Aislamiento de datos, auth JWT + roles, alta de inquilino, panel base | 2 | ✅ |
-| **2** | **Ingesta de conocimiento** | Fuentes (PDF/texto/URL), crawler, troceado, embeddings, panel de fuentes | 2 | 🟡 |
+| **2** | **Ingesta de conocimiento** | Fuentes (PDF/texto/URL), crawler, troceado, embeddings, panel de fuentes | 2 | ✅ |
 | **3** | **Motor de respuesta (RAG)** | Recuperación híbrida, generación con citas, streaming, memoria, control de costo | 2 | ⬜ |
 | **4** | **Evaluación de calidad** | Golden set por inquilino, métricas de acierto y fidelidad, corrida en CI | 1 | ⬜ |
 | **5** | **Widget embebible** | Script de embebido, Shadow DOM, theming por inquilino, dominios permitidos | 1.5 | ⬜ |
@@ -198,10 +198,15 @@ Leyenda: ✅ hecho · 🟡 en curso · ⬜ pendiente
 - [x] `text-embedding-004` está retirado (404). Los modelos vivos son `gemini-embedding-001` y la familia `gemini-embedding-2`
 - [ ] Versión de índice para reindexar sin dejar al asistente sin servicio
 
-**Incremento 2.4 — Panel de fuentes** ⬜
-- [ ] Lista con estado (pendiente/indexando/listo/error), progreso y conteo de fragmentos
-- [ ] Reindexar, eliminar, previsualizar fragmentos extraídos
-- [ ] Verificado E2E: subir PDF → indexar → ver fragmentos
+**Incremento 2.4 — Panel de fuentes** ✅ (verificado en navegador)
+- [x] Pantalla **Fuentes** con las tres altas: subir archivo, rastrear un sitio y pegar texto
+- [x] Listado con insignia de estado, tipo, documentos, caracteres y el motivo del error si lo hubo
+- [x] Consumo del plan a la vista (`3 de 3`) y bloqueo de los formularios al llegar al tope
+- [x] Volver a rastrear (solo fuentes de tipo URL), borrar con confirmación (solo OWNER) y **vista previa de los trozos** indexados
+- [x] El cliente HTTP distingue `FormData` de JSON: fijar el `Content-Type` a mano rompía la subida
+- [x] Verificado: ver trozos muestra el extracto real; borrar libera cuota y el aviso desaparece; subir un archivo lo deja `LISTA` y **buscable al instante** ("¿puedo entrar con mi perro al local?" → `politica-mascotas.txt`, distancia 0.197)
+
+### ✅ BLOQUE 2 (Ingesta de conocimiento) COMPLETO — 2.1 a 2.4
 
 ---
 
@@ -347,4 +352,5 @@ Incrementos pequeños y **verificados** antes de avanzar. Trabajo **inline y fru
 - **2026-07-24** — **Incremento 2.1 ✅** — fuentes manuales (PDF/TXT/MD y texto pegado) con extracción real, estados y cuota aplicada. De paso quedó verificado el corte por cuota que el 1.5 había dejado pendiente.
 - **2026-07-24** — **Incremento 2.2 ✅** — crawler con robots.txt, sitemap, limpieza de HTML y detección de cambios por huella. Se introdujo `documento` como unidad real de contenido (V7).
 - **2026-07-24** — **Incremento 2.3 🟡** — troceado con solape, embeddings intercambiables, pgvector con HNSW y reindexado solo de lo que cambió. El pipeline entero está verificado con embeddings locales; **falta repetirlo con Gemini** (clave en `application-local.properties`).
+- **2026-07-25** — **BLOQUE 2 COMPLETO ✅** — el negocio ya puede cargar su conocimiento por tres vías, verlo troceado y buscarlo por significado. Sigue el Bloque 3: que Vera responda.
 - **2026-07-24** — **0.4 a medias**: repo local, CI y artefactos de despliegue listos; falta crear el repo en GitHub (`gh` no instalado) y `flyctl deploy` (provisiona recursos de pago, pendiente del visto bueno del usuario).

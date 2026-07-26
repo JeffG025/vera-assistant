@@ -92,6 +92,11 @@ public class FuenteController {
 		return indexador.buscar(consulta.texto(), cuantos);
 	}
 
+	@GetMapping("/{id}/fragmentos")
+	public List<FragmentoDao.Trozo> fragmentos(@PathVariable UUID id) {
+		return indexador.fragmentosDe(id, 30);
+	}
+
 	@DeleteMapping("/{id}")
 	@PreAuthorize("hasRole('OWNER')")
 	public ResponseEntity<Void> eliminar(@PathVariable UUID id) {

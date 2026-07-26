@@ -46,6 +46,10 @@ public class IndexadorService {
 		return fragmentos.buscar(embeddings.generarUno(consulta), cuantos);
 	}
 
+	public List<FragmentoDao.Trozo> fragmentosDe(java.util.UUID fuenteId, int limite) {
+		return fragmentos.porFuente(fuenteId, limite);
+	}
+
 	public String modelo() {
 		return embeddings.modelo();
 	}
