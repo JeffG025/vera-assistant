@@ -1,0 +1,17 @@
+pregunta,respuesta_esperada,fuente_esperada,debe_saber,esencial
+a que hora abren entre semana,A las nueve de la manana,Horarios,si,si
+hasta que hora atienden los sabados,Hasta las dos de la tarde,Horarios,si,no
+trabajan los domingos,No,Horarios,si,no
+estan abiertos el fin de semana,Sabados hasta las dos; domingos cerrados,Horarios,si,si
+a que hora cierran de lunes a viernes,A las siete de la noche,Horarios,si,no
+cuanto tiempo tengo para devolver algo,30 dias desde la compra,Devoluciones,si,si
+que necesito para hacer una devolucion,El comprobante y el empaque original,Devoluciones,si,no
+me aceptan un producto que no me gusto,Si dentro de 30 dias con comprobante y empaque,Devoluciones,si,no
+puedo entrar con mi perro,Si con correa o transportadora,politica-mascotas.txt,si,no
+aceptan gatos en el local,Si con correa o transportadora,politica-mascotas.txt,si,no
+mi mascota necesita algo para entrar,Correa o transportadora,politica-mascotas.txt,si,si
+cuanto cuesta el envio a domicilio,,,no,no
+tienen estacionamiento para clientes,,,no,si
+cual es el precio del alimento para perro,,,no,si
+me hacen descuento si compro mucho,,,no,no
+en que otras sucursales estan,,,no,no

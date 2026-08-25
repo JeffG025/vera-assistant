@@ -9,6 +9,8 @@ public interface CasoEvalRepository extends JpaRepository<CasoEval, UUID> {
 
 	List<CasoEval> findByActivoTrueOrderByCreadoEn();
 
+	List<CasoEval> findByActivoTrueAndEsencialTrueOrderByCreadoEn();
+
 	List<CasoEval> findAllByOrderByCreadoEn();
 
 }

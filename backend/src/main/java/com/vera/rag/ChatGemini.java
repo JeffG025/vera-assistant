@@ -8,15 +8,14 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.http.HttpStatus;
 
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.vera.error.ExcepcionNegocio;
 
 public class ChatGemini implements ProveedorChat {
 
@@ -123,17 +122,25 @@ public class ChatGemini implements ProveedorChat {
 				if (codigo < 400) {
 					return respuesta;
 				}
+				String cuerpoError = leerCuerpo(respuesta);
+
+				// Un 429 por cuota diaria no se arregla esperando unos segundos: reintentar solo
+				// alarga la espera y deja al que llama sin saber por que fallo de verdad.
+				if (codigo == 429 && esCuotaDiaria(cuerpoError)) {
+					throw new ExcepcionCuotaLlm(true,
+							"se agoto la cuota diaria del free tier de Gemini para " + modelo);
+				}
 				if ((codigo == 429 || codigo >= 500) && intento < 3) {
 					Thread.sleep(espera);
 					espera *= 2;
 					continue;
 				}
 				if (codigo == 429) {
-					throw new ExcepcionNegocio(HttpStatus.SERVICE_UNAVAILABLE,
+					throw new ExcepcionCuotaLlm(false,
 							"el asistente esta saturado en este momento; intenta de nuevo en unos segundos");
 				}
 				throw new IllegalStateException(
-						"Gemini respondio " + codigo + " con el modelo " + modelo);
+						"Gemini respondio " + codigo + " con el modelo " + modelo + motivo(cuerpoError));
 			}
 			throw new IllegalStateException("Gemini no respondio tras 3 intentos");
 		} catch (IOException e) {
@@ -141,6 +148,34 @@ public class ChatGemini implements ProveedorChat {
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 			throw new IllegalStateException("interrumpido al generar la respuesta", e);
+		}
+	}
+
+	// Los dos 429 se ven iguales salvo por el id de cuota: el diario obliga a parar, el de
+	// minuto solo a esperar.
+	static boolean esCuotaDiaria(String cuerpoError) {
+		return cuerpoError.contains("PerDay");
+	}
+
+	// El cuerpo del error dice que cuota se topo; segun el manejador llega como texto o como lineas.
+	private String leerCuerpo(HttpResponse<?> respuesta) {
+		Object cuerpo = respuesta.body();
+		if (cuerpo instanceof String texto) {
+			return texto;
+		}
+		if (cuerpo instanceof Stream<?> lineas) {
+			return lineas.map(String::valueOf).collect(Collectors.joining("\n"));
+		}
+		return "";
+	}
+
+	// Saca el mensaje que manda la API para no reportar solo un numero de error.
+	private String motivo(String cuerpo) {
+		try {
+			String mensaje = json.readTree(cuerpo).path("error").path("message").asText("");
+			return mensaje.isBlank() ? "" : ": " + mensaje;
+		} catch (IOException e) {
+			return "";
 		}
 	}
 

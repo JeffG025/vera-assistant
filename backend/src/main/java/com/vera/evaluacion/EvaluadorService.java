@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -15,6 +16,7 @@ import com.vera.dominio.CorridaEvalRepository;
 import com.vera.dominio.ResultadoEval;
 import com.vera.dominio.ResultadoEvalRepository;
 import com.vera.error.ExcepcionNegocio;
+import com.vera.rag.ExcepcionCuotaLlm;
 import com.vera.rag.RagService;
 import com.vera.rag.RecuperadorService;
 import com.vera.tenancy.TenantContext;
@@ -42,10 +44,16 @@ public class EvaluadorService {
 		this.recuperador = recuperador;
 	}
 
-	public CorridaEval ejecutar() {
-		List<CasoEval> activos = casos.findByActivoTrueOrderByCreadoEn();
+	public CorridaEval ejecutar(String conjunto) {
+		// Por omision se corre el conjunto esencial: es el unico que cabe entero en el free tier.
+		boolean soloEsenciales = !"completo".equalsIgnoreCase(conjunto);
+		List<CasoEval> activos = soloEsenciales
+				? casos.findByActivoTrueAndEsencialTrueOrderByCreadoEn()
+				: casos.findByActivoTrueOrderByCreadoEn();
 		if (activos.isEmpty()) {
-			throw ExcepcionNegocio.conflicto("no hay casos de evaluacion cargados");
+			throw ExcepcionNegocio.conflicto(soloEsenciales
+					? "no hay casos marcados como esenciales; marca los que deban correr en cada examen"
+					: "no hay casos de evaluacion cargados");
 		}
 
 		// La corrida se persiste al final, ya con sus metricas: guardarla vacia dejaria una
@@ -53,27 +61,28 @@ public class EvaluadorService {
 		List<ResultadoEval> filas = new java.util.ArrayList<>();
 		int recOk = 0, recBase = 0, fidOk = 0, fidBase = 0, absOk = 0, absBase = 0, tokens = 0, errores = 0;
 		String modelo = null;
+		boolean cortada = false;
+		int indice = 0;
 
-		for (CasoEval caso : activos) {
+		for (; indice < activos.size(); indice++) {
+			CasoEval caso = activos.get(indice);
 			// El examen dispara dos llamadas por caso y el free tier corta por minuto.
 			// Un examen es un proceso por lotes: puede permitirse ir despacio.
-			pausar();
+			if (indice > 0) {
+				pausar();
+			}
 
 			RagService.Resultado r;
 			try {
 				r = rag.responderSinRastro(caso.getPregunta());
 			} catch (RuntimeException e) {
 				// Un caso caido no debe tirar el examen entero: se marca y se sigue.
-				ResultadoEval falla = new ResultadoEval();
-				falla.setTenantId(TenantContext.actual());
-				falla.setPregunta(caso.getPregunta());
-				falla.setRespuestaEsperada(caso.getRespuestaEsperada());
-				falla.setFuenteEsperada(caso.getFuenteEsperada());
-				falla.setDebeSaber(caso.isDebeSaber());
-				falla.setSinInformacion(false);
-				falla.setMotivo("no se pudo evaluar: " + e.getMessage());
-				filas.add(falla);
+				filas.add(fallo(caso, "no se pudo evaluar: " + e.getMessage()));
 				errores++;
+				if (esCuotaDiaria(e)) {
+					cortada = true;
+					break;
+				}
 				continue;
 			}
 			tokens += r.tokens();
@@ -140,14 +149,29 @@ public class EvaluadorService {
 						fidBase--;
 						errores++;
 						fila.setMotivo("no se pudo juzgar: " + e.getMessage());
+						cortada = esCuotaDiaria(e);
 					}
 				}
 			}
 			filas.add(fila);
+			if (cortada) {
+				break;
+			}
+		}
+
+		// Sin cuota no queda examen que aplicar. Los casos que se quedaron sin correr entran
+		// igual como error: si no, una corrida cortada al tercer caso se veria como un examen
+		// completo de tres preguntas.
+		if (cortada) {
+			for (CasoEval pendiente : activos.subList(Math.min(indice + 1, activos.size()), activos.size())) {
+				filas.add(fallo(pendiente, "no se ejecuto: la corrida se corto al agotarse la cuota diaria"));
+				errores++;
+			}
 		}
 
 		CorridaEval guardada = new CorridaEval();
 		guardada.setTenantId(TenantContext.actual());
+		guardada.setConjunto(soloEsenciales ? "esencial" : "completo");
 		guardada.setUmbral(BigDecimal.valueOf(recuperador.umbral()));
 		guardada.setTotal(activos.size());
 		guardada.setRecuperacionOk(recOk);
@@ -168,6 +192,24 @@ public class EvaluadorService {
 		return persistida;
 	}
 
+	// Fila de un caso que no se pudo evaluar; sin ella el caso desapareceria del examen.
+	private ResultadoEval fallo(CasoEval caso, String motivo) {
+		ResultadoEval falla = new ResultadoEval();
+		falla.setTenantId(TenantContext.actual());
+		falla.setPregunta(caso.getPregunta());
+		falla.setRespuestaEsperada(caso.getRespuestaEsperada());
+		falla.setFuenteEsperada(caso.getFuenteEsperada());
+		falla.setDebeSaber(caso.isDebeSaber());
+		falla.setSinInformacion(false);
+		falla.setMotivo(motivo);
+		return falla;
+	}
+
+	// La cuota diaria no se recupera esperando: seguir preguntando solo repite el mismo error.
+	private boolean esCuotaDiaria(RuntimeException e) {
+		return e instanceof ExcepcionCuotaLlm cuota && cuota.esDiaria();
+	}
+
 	private void pausar() {
 		try {
 			Thread.sleep(pausaMs);
@@ -186,6 +228,102 @@ public class EvaluadorService {
 
 	public List<CorridaEval> historial() {
 		return corridas.findTop20ByOrderByCreadoEnDesc();
+	}
+
+	public enum Veredicto {
+		ACIERTO, FALLO, ERROR
+	}
+
+	public record Cambio(String pregunta, Veredicto antes, Veredicto despues, String motivo) {
+	}
+
+	public record Comparacion(CorridaEval base, CorridaEval nueva, String veredicto,
+			BigDecimal deltaPuntaje, int mejoraron, int empeoraron, int iguales, List<Cambio> cambios) {
+	}
+
+	/**
+	 * Compara dos corridas caso por caso. El puntaje global sube y baja por muchas razones;
+	 * lo que dice si un cambio de prompt sirvió o no es qué preguntas dejaron de responderse bien.
+	 */
+	public Comparacion comparar(java.util.UUID idNueva, java.util.UUID idBase) {
+		CorridaEval nueva = corridas.findById(idNueva)
+				.orElseThrow(() -> ExcepcionNegocio.noEncontrado("corrida no encontrada"));
+		CorridaEval base = corridas.findById(idBase)
+				.orElseThrow(() -> ExcepcionNegocio.noEncontrado("corrida de referencia no encontrada"));
+
+		// Comparar un examen de 6 preguntas contra uno de 16 daria un delta sin significado.
+		if (!nueva.getConjunto().equals(base.getConjunto())) {
+			throw ExcepcionNegocio.conflicto("no se comparan conjuntos distintos: la corrida es '"
+					+ nueva.getConjunto() + "' y la referencia '" + base.getConjunto() + "'");
+		}
+
+		Map<String, ResultadoEval> antes = porPregunta(base.getId());
+		Map<String, ResultadoEval> despues = porPregunta(nueva.getId());
+
+		List<Cambio> empeoraron = new java.util.ArrayList<>();
+		List<Cambio> mejoraron = new java.util.ArrayList<>();
+		List<Cambio> sinPar = new java.util.ArrayList<>();
+		int iguales = 0;
+
+		for (Map.Entry<String, ResultadoEval> entrada : despues.entrySet()) {
+			ResultadoEval previo = antes.get(entrada.getKey());
+			Veredicto ahora = veredicto(entrada.getValue());
+			if (previo == null) {
+				sinPar.add(new Cambio(entrada.getKey(), null, ahora, "caso nuevo en el conjunto"));
+				continue;
+			}
+			Veredicto era = veredicto(previo);
+			if (era == ahora) {
+				iguales++;
+			} else if (ahora == Veredicto.ACIERTO) {
+				mejoraron.add(new Cambio(entrada.getKey(), era, ahora, entrada.getValue().getMotivo()));
+			} else {
+				empeoraron.add(new Cambio(entrada.getKey(), era, ahora, entrada.getValue().getMotivo()));
+			}
+		}
+		// Un caso que desaparecio del conjunto tiene que verse: si no, quitar las preguntas
+		// dificiles subiria el puntaje y la comparacion lo aplaudiria.
+		for (String pregunta : antes.keySet()) {
+			if (!despues.containsKey(pregunta)) {
+				sinPar.add(new Cambio(pregunta, veredicto(antes.get(pregunta)), null,
+						"el caso ya no esta en el conjunto"));
+			}
+		}
+
+		// Una regresion pesa mas que una mejora: es lo que hay que mirar antes de publicar.
+		String veredictoGlobal = !empeoraron.isEmpty() ? "REGRESION"
+				: !mejoraron.isEmpty() ? "MEJORO" : "IGUAL";
+
+		List<Cambio> cambios = new java.util.ArrayList<>(empeoraron);
+		cambios.addAll(mejoraron);
+		cambios.addAll(sinPar);
+		return new Comparacion(base, nueva, veredictoGlobal,
+				nueva.getPuntaje().subtract(base.getPuntaje()),
+				mejoraron.size(), empeoraron.size(), iguales, cambios);
+	}
+
+	private Map<String, ResultadoEval> porPregunta(java.util.UUID corridaId) {
+		Map<String, ResultadoEval> mapa = new java.util.LinkedHashMap<>();
+		for (ResultadoEval fila : resultados.findByCorridaIdOrderByCreadoEn(corridaId)) {
+			mapa.putIfAbsent(fila.getPregunta(), fila);
+		}
+		return mapa;
+	}
+
+	// Un caso no deja tres notas sueltas sino una: quedo bien o no quedo bien. Es lo unico
+	// que se puede comparar de una corrida a otra.
+	static Veredicto veredicto(ResultadoEval r) {
+		String motivo = r.getMotivo() == null ? "" : r.getMotivo();
+		if (motivo.startsWith("no se pudo") || motivo.startsWith("no se ejecuto")) {
+			return Veredicto.ERROR;
+		}
+		if (!r.isDebeSaber()) {
+			return r.isSinInformacion() ? Veredicto.ACIERTO : Veredicto.FALLO;
+		}
+		// null es "no aplica" (por ejemplo, un caso sin respuesta esperada): no cuenta como fallo.
+		boolean falloAlgo = Boolean.FALSE.equals(r.getRecuperacionOk())
+				|| Boolean.FALSE.equals(r.getFidelidadOk());
+		return falloAlgo ? Veredicto.FALLO : Veredicto.ACIERTO;
 	}
 
 	public List<ResultadoEval> detalle(java.util.UUID corridaId) {

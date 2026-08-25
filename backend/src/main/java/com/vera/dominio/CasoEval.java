@@ -38,6 +38,10 @@ public class CasoEval {
 	@Column(name = "debe_saber", nullable = false)
 	private boolean debeSaber = true;
 
+	// Subconjunto que cabe en el free tier y se corre a diario; el resto solo con clave de pago.
+	@Column(nullable = false)
+	private boolean esencial = false;
+
 	@Column(nullable = false)
 	private boolean activo = true;
 

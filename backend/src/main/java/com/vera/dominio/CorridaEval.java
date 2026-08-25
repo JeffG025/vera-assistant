@@ -29,6 +29,10 @@ public class CorridaEval {
 	@Column(nullable = false)
 	private int total;
 
+	// Que examen se aplico: 'esencial' (el que cabe en el free tier) o 'completo'.
+	@Column(nullable = false, length = 20)
+	private String conjunto = "completo";
+
 	// Cada metrica guarda aciertos y base: un 8/8 y un 80/80 no valen lo mismo y el
 	// porcentaje solo esconderia esa diferencia.
 	@Column(name = "recuperacion_ok", nullable = false)

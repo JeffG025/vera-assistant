@@ -29,13 +29,28 @@ public class EvaluacionService {
 		return casos.findAllByOrderByCreadoEn();
 	}
 
-	public CasoEval crear(String pregunta, String respuestaEsperada, String fuenteEsperada, boolean debeSaber) {
+	public CasoEval crear(String pregunta, String respuestaEsperada, String fuenteEsperada, boolean debeSaber,
+			boolean esencial) {
 		CasoEval caso = new CasoEval();
 		caso.setTenantId(TenantContext.actual());
 		caso.setPregunta(pregunta.strip());
 		caso.setRespuestaEsperada(vacioANulo(respuestaEsperada));
 		caso.setFuenteEsperada(vacioANulo(fuenteEsperada));
 		caso.setDebeSaber(debeSaber);
+		caso.setEsencial(esencial);
+		return casos.save(caso);
+	}
+
+	/** Marca o desmarca un caso sin tener que volver a importarlo. */
+	public CasoEval actualizar(UUID id, Boolean esencial, Boolean activo) {
+		CasoEval caso = casos.findById(id)
+				.orElseThrow(() -> ExcepcionNegocio.noEncontrado("caso no encontrado"));
+		if (esencial != null) {
+			caso.setEsencial(esencial);
+		}
+		if (activo != null) {
+			caso.setActivo(activo);
+		}
 		return casos.save(caso);
 	}
 
@@ -46,8 +61,9 @@ public class EvaluacionService {
 	}
 
 	/**
-	 * Importa un CSV con columnas: pregunta, respuesta_esperada, fuente_esperada, debe_saber.
-	 * Formato deliberadamente simple para que el dueño del negocio lo arme en una hoja de cálculo.
+	 * Importa un CSV con columnas: pregunta, respuesta_esperada, fuente_esperada, debe_saber,
+	 * esencial. Formato deliberadamente simple para que el dueño del negocio lo arme en una
+	 * hoja de cálculo.
 	 */
 	public int importarCsv(MultipartFile archivo) {
 		int importados = 0;
@@ -71,8 +87,9 @@ public class EvaluacionService {
 					continue;
 				}
 				boolean debeSaber = campos.size() < 4 || !campos.get(3).strip().equalsIgnoreCase("no");
+				boolean esencial = campos.size() > 4 && campos.get(4).strip().equalsIgnoreCase("si");
 				crear(campos.get(0), campos.size() > 1 ? campos.get(1) : null,
-						campos.size() > 2 ? campos.get(2) : null, debeSaber);
+						campos.size() > 2 ? campos.get(2) : null, debeSaber, esencial);
 				importados++;
 			}
 		} catch (IOException e) {
