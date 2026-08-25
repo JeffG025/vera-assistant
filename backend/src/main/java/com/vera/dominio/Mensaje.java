@@ -41,6 +41,10 @@ public class Mensaje {
 	@Column(name = "sin_informacion", nullable = false)
 	private boolean sinInformacion;
 
+	// Lo que opino el visitante: 1 sirvio, -1 no sirvio, nulo si no dijo nada (lo normal).
+	@Column
+	private Short calificacion;
+
 	@Column(name = "creado_en", nullable = false)
 	private OffsetDateTime creadoEn;
 

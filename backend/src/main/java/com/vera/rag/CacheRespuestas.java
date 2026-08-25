@@ -19,8 +19,13 @@ import org.springframework.stereotype.Component;
 @Component
 public class CacheRespuestas {
 
-	/** Solo el contenido de la respuesta: la conversación y sus mensajes se crean siempre nuevos. */
-	public record Guardada(String respuesta, java.util.List<RagService.Fuente> fuentes, boolean sinInformacion) {
+	/**
+	 * Solo el contenido de la respuesta: la conversación y sus mensajes se crean siempre nuevos.
+	 * Los textos van emparejados por posición con las fuentes; sin ellos, una respuesta servida
+	 * desde caché aparecería en la bandeja sin los fragmentos con los que se redactó.
+	 */
+	public record Guardada(String respuesta, java.util.List<RagService.Fuente> fuentes,
+			java.util.List<String> textos, boolean sinInformacion) {
 	}
 
 	private record Entrada(Guardada valor, long expiraEn) {

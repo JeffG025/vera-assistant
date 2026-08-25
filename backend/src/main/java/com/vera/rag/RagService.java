@@ -2,15 +2,21 @@ package com.vera.rag;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Service;
 
 import com.vera.dominio.Conversacion;
 import com.vera.dominio.ConversacionRepository;
 import com.vera.dominio.Mensaje;
+import com.vera.dominio.MensajeFuente;
+import com.vera.dominio.MensajeFuenteRepository;
 import com.vera.dominio.MensajeRepository;
 import com.vera.dominio.Tenant;
 import com.vera.dominio.TenantRepository;
@@ -27,6 +33,10 @@ public class RagService {
 	private final TenantRepository tenants;
 	private final ConversacionRepository conversaciones;
 	private final MensajeRepository mensajes;
+	private final MensajeFuenteRepository mensajeFuentes;
+
+	// El modelo cita con [1], [2]... Es la misma marca que el widget usa para desplegar fuentes.
+	private static final Pattern MARCA_DE_CITA = Pattern.compile("\\[(\\d+)\\]");
 	private final com.vera.negocio.CuotaService cuotas;
 	private final com.vera.negocio.UsoService uso;
 	private final CacheRespuestas cache;
@@ -34,6 +44,7 @@ public class RagService {
 
 	public RagService(RecuperadorService recuperador, ProveedorChat chat, TenantRepository tenants,
 			ConversacionRepository conversaciones, MensajeRepository mensajes,
+			MensajeFuenteRepository mensajeFuentes,
 			com.vera.negocio.CuotaService cuotas, com.vera.negocio.UsoService uso,
 			CacheRespuestas cache, LimitadorTasa limitador) {
 		this.recuperador = recuperador;
@@ -41,6 +52,7 @@ public class RagService {
 		this.tenants = tenants;
 		this.conversaciones = conversaciones;
 		this.mensajes = mensajes;
+		this.mensajeFuentes = mensajeFuentes;
 		this.cuotas = cuotas;
 		this.uso = uso;
 		this.cache = cache;
@@ -50,16 +62,20 @@ public class RagService {
 	public record Fuente(int numero, String titulo, String url, double distancia) {
 	}
 
-	public record Resultado(String conversacionId, String respuesta, List<Fuente> fuentes,
-			boolean sinInformacion, int tokens, String modelo, String consultaUsada) {
+	public record Resultado(String conversacionId, String mensajeId, String respuesta,
+			List<Fuente> fuentes, boolean sinInformacion, int tokens, String modelo,
+			String consultaUsada) {
 	}
 
-	public Resultado responder(String pregunta, String conversacionId) {
-		return procesar(pregunta, conversacionId, null);
+	// El canal se guarda con la conversacion: la bandeja del bloque 6 necesita distinguir al
+	// visitante que escribio desde el widget de una prueba hecha en el panel.
+	public Resultado responder(String pregunta, String conversacionId, String canal) {
+		return procesar(pregunta, conversacionId, null, canal);
 	}
 
-	public Resultado responderEnStream(String pregunta, String conversacionId, Consumer<String> alRecibir) {
-		return procesar(pregunta, conversacionId, alRecibir);
+	public Resultado responderEnStream(String pregunta, String conversacionId, Consumer<String> alRecibir,
+			String canal) {
+		return procesar(pregunta, conversacionId, alRecibir, canal);
 	}
 
 	/**
@@ -73,7 +89,8 @@ public class RagService {
 
 		List<RecuperadorService.Recuperado> recuperados = recuperador.recuperar(pregunta, FRAGMENTOS);
 		if (recuperados.isEmpty()) {
-			return new Resultado(null, sinInformacion(negocio), List.of(), true, 0, "ninguno", pregunta);
+			return new Resultado(null, null, sinInformacion(negocio), List.of(), true, 0, "ninguno",
+					pregunta);
 		}
 
 		ProveedorChat.Respuesta salida = chat.responder(instrucciones(negocio, numerar(recuperados)),
@@ -84,7 +101,8 @@ public class RagService {
 			RecuperadorService.Recuperado r = recuperados.get(i);
 			fuentes.add(new Fuente(i + 1, r.titulo(), r.url(), r.distancia()));
 		}
-		return new Resultado(null, salida.texto(), fuentes, false, salida.tokens(), chat.modelo(), pregunta);
+		return new Resultado(null, null, salida.texto(), fuentes, false, salida.tokens(), chat.modelo(),
+				pregunta);
 	}
 
 	/** Juez de fidelidad: compara la respuesta obtenida contra la esperada. */
@@ -102,7 +120,8 @@ public class RagService {
 		return chat.responder(sistema, List.of(), entrada).texto().strip();
 	}
 
-	private Resultado procesar(String pregunta, String conversacionId, Consumer<String> alRecibir) {
+	private Resultado procesar(String pregunta, String conversacionId, Consumer<String> alRecibir,
+			String canal) {
 		UUID inquilino = TenantContext.actual();
 		Tenant negocio = tenants.findById(inquilino)
 				.orElseThrow(() -> ExcepcionNegocio.noEncontrado("negocio no encontrado"));
@@ -116,11 +135,11 @@ public class RagService {
 		if (primerTurno) {
 			var guardada = cache.buscar(inquilino, pregunta);
 			if (guardada.isPresent()) {
-				return desdeCache(guardada.get(), pregunta, alRecibir);
+				return desdeCache(guardada.get(), pregunta, alRecibir, canal);
 			}
 		}
 
-		Conversacion conversacion = resolver(conversacionId);
+		Conversacion conversacion = resolver(conversacionId, canal);
 
 		List<Mensaje> previos = historial(conversacion.getId());
 		guardar(conversacion, "USUARIO", pregunta, 0, false);
@@ -137,11 +156,13 @@ public class RagService {
 			if (alRecibir != null) {
 				alRecibir.accept(texto);
 			}
-			guardar(conversacion, "ASISTENTE", texto, 0, true);
+			Mensaje vacio = guardar(conversacion, "ASISTENTE", texto, 0, true);
 			if (primerTurno) {
-				cache.guardar(inquilino, pregunta, new CacheRespuestas.Guardada(texto, List.of(), true));
+				cache.guardar(inquilino, pregunta,
+						new CacheRespuestas.Guardada(texto, List.of(), List.of(), true));
 			}
-			return new Resultado(conversacion.getId().toString(), texto, List.of(), true, 0, "ninguno", consulta);
+			return new Resultado(conversacion.getId().toString(), vacio.getId().toString(), texto,
+					List.of(), true, 0, "ninguno", consulta);
 		}
 
 		String instrucciones = instrucciones(negocio, numerar(recuperados));
@@ -150,7 +171,7 @@ public class RagService {
 				? chat.responder(instrucciones, turnos, pregunta)
 				: chat.responderEnStream(instrucciones, turnos, pregunta, alRecibir);
 
-		guardar(conversacion, "ASISTENTE", salida.texto(), salida.tokens(), false);
+		Mensaje respondido = guardar(conversacion, "ASISTENTE", salida.texto(), salida.tokens(), false);
 		conversaciones.save(conversacion);
 
 		List<Fuente> fuentes = new ArrayList<>();
@@ -158,35 +179,41 @@ public class RagService {
 			RecuperadorService.Recuperado r = recuperados.get(i);
 			fuentes.add(new Fuente(i + 1, r.titulo(), r.url(), r.distancia()));
 		}
+		List<String> textos = recuperados.stream().map(RecuperadorService.Recuperado::texto).toList();
+		guardarFuentes(respondido, fuentes, textos, salida.texto());
+
 		if (primerTurno) {
-			cache.guardar(inquilino, pregunta, new CacheRespuestas.Guardada(salida.texto(), fuentes, false));
+			cache.guardar(inquilino, pregunta,
+					new CacheRespuestas.Guardada(salida.texto(), fuentes, textos, false));
 		}
-		return new Resultado(conversacion.getId().toString(), salida.texto(), fuentes, false,
-				salida.tokens(), chat.modelo(), consulta);
+		return new Resultado(conversacion.getId().toString(), respondido.getId().toString(),
+				salida.texto(), fuentes, false, salida.tokens(), chat.modelo(), consulta);
 	}
 
 	// Un acierto de caché ahorra la llamada al modelo, no la contabilidad: la conversación
 	// y sus mensajes se crean igual, con 0 tokens porque de verdad no se gastó ninguno.
 	private Resultado desdeCache(CacheRespuestas.Guardada guardada, String pregunta,
-			Consumer<String> alRecibir) {
-		Conversacion conversacion = resolver(null);
+			Consumer<String> alRecibir, String canal) {
+		Conversacion conversacion = resolver(null, canal);
 		guardar(conversacion, "USUARIO", pregunta, 0, false);
-		guardar(conversacion, "ASISTENTE", guardada.respuesta(), 0, guardada.sinInformacion());
+		Mensaje respondido = guardar(conversacion, "ASISTENTE", guardada.respuesta(), 0,
+				guardada.sinInformacion());
+		guardarFuentes(respondido, guardada.fuentes(), guardada.textos(), guardada.respuesta());
 		if (alRecibir != null) {
 			alRecibir.accept(guardada.respuesta());
 		}
-		return new Resultado(conversacion.getId().toString(), guardada.respuesta(), guardada.fuentes(),
-				guardada.sinInformacion(), 0, "cache", pregunta);
+		return new Resultado(conversacion.getId().toString(), respondido.getId().toString(),
+				guardada.respuesta(), guardada.fuentes(), guardada.sinInformacion(), 0, "cache", pregunta);
 	}
 
-	private Conversacion resolver(String id) {
+	private Conversacion resolver(String id, String canal) {
 		if (id != null && !id.isBlank()) {
 			return conversaciones.findById(UUID.fromString(id))
 					.orElseThrow(() -> ExcepcionNegocio.noEncontrado("conversacion no encontrada"));
 		}
 		Conversacion nueva = new Conversacion();
 		nueva.setTenantId(TenantContext.actual());
-		nueva.setCanal("PANEL");
+		nueva.setCanal(canal);
 		return conversaciones.save(nueva);
 	}
 
@@ -204,7 +231,8 @@ public class RagService {
 		return turnos;
 	}
 
-	private void guardar(Conversacion conversacion, String rol, String texto, int tokens, boolean sinInfo) {
+	private Mensaje guardar(Conversacion conversacion, String rol, String texto, int tokens,
+			boolean sinInfo) {
 		Mensaje mensaje = new Mensaje();
 		mensaje.setTenantId(conversacion.getTenantId());
 		mensaje.setConversacionId(conversacion.getId());
@@ -212,7 +240,35 @@ public class RagService {
 		mensaje.setTexto(texto);
 		mensaje.setTokens(tokens);
 		mensaje.setSinInformacion(sinInfo);
-		mensajes.save(mensaje);
+		return mensajes.save(mensaje);
+	}
+
+	/**
+	 * Deja constancia de con que se respondio. Lo que el modelo cito con su [n] se marca aparte:
+	 * saber si recupero cinco y usó dos separa un fallo de busqueda de uno de redaccion.
+	 */
+	private void guardarFuentes(Mensaje mensaje, List<Fuente> fuentes, List<String> textos,
+			String respuesta) {
+		Set<Integer> citadas = new HashSet<>();
+		Matcher marcas = MARCA_DE_CITA.matcher(respuesta);
+		while (marcas.find()) {
+			citadas.add(Integer.parseInt(marcas.group(1)));
+		}
+		List<MensajeFuente> filas = new ArrayList<>();
+		for (int i = 0; i < fuentes.size(); i++) {
+			Fuente f = fuentes.get(i);
+			MensajeFuente fila = new MensajeFuente();
+			fila.setTenantId(mensaje.getTenantId());
+			fila.setMensajeId(mensaje.getId());
+			fila.setNumero((short) f.numero());
+			fila.setTitulo(f.titulo());
+			fila.setUrl(f.url());
+			fila.setTexto(textos.get(i));
+			fila.setDistancia((float) f.distancia());
+			fila.setCitada(citadas.contains(f.numero()));
+			filas.add(fila);
+		}
+		mensajeFuentes.saveAll(filas);
 	}
 
 	// Una llamada extra al modelo, corta y barata, que evita recuperar basura en las repreguntas.
