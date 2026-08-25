@@ -17,6 +17,31 @@
         max-width: 38rem;
         margin: 0 auto;
       }
+
+      /* CSS hostil a proposito: si el widget no estuviera aislado, estas reglas lo destrozarian.
+         Ningun sitio de cliente es tan agresivo, pero muchos tienen una o dos de estas. */
+      * {
+        font-family: 'Comic Sans MS', cursive !important;
+        letter-spacing: 0.08em !important;
+      }
+      div {
+        border: 3px dashed #c0392b !important;
+        background: #fffbe6 !important;
+        padding: 0.75rem !important;
+      }
+      button {
+        background: #e74c3c !important;
+        color: #000 !important;
+        border-radius: 0 !important;
+        text-transform: uppercase !important;
+        font-size: 2.5rem !important;
+        width: auto !important;
+        height: auto !important;
+      }
+      code {
+        color: #c0392b !important;
+        font-size: 1.4rem !important;
+      }
     </style>
   </head>
   <body>
@@ -26,7 +51,22 @@
         Esta página carga el archivo <code>dist/vera.js</code> ya compilado, tal
         como lo haría el sitio de un cliente: una sola etiqueta script y nada más.
       </p>
+      <p>
+        Su CSS es hostil a propósito — Comic Sans, bordes rojos y botones
+        gigantes con <code>!important</code>. El widget de la esquina debe verse
+        intacto: eso es el Shadow DOM haciendo su trabajo.
+      </p>
     </div>
-    <script src="./dist/vera.js" data-vera-key="pk_demo_local"></script>
+    <!-- La clave pública del negocio demo local; si la rotas, cópiala de Ajustes en el panel.
+         data-vera-api solo hace falta aquí porque en desarrollo el widget se sirve aparte
+         del backend; en un sitio real la API sale del propio src del script. -->
+    <script
+      src="./dist/vera.js"
+      data-vera-key="pk_a0020a543729490bab9075e113172dd7"
+      data-vera-api="http://localhost:8090"
+      data-vera-color="#0f9d58"
+      data-vera-avatar="🐾"
+      data-vera-posicion="izquierda"
+    ></script>
   </body>
 </html>

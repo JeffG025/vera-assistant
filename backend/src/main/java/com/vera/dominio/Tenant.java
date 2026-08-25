@@ -59,6 +59,23 @@ public class Tenant {
 	@Column(name = "asistente_saludo")
 	private String asistenteSaludo;
 
+	// Apariencia en el sitio del cliente; la base la valida con un CHECK.
+	@Column(name = "asistente_color", nullable = false, length = 7)
+	private String asistenteColor = "#4f46e5";
+
+	@Column(name = "asistente_avatar", nullable = false, length = 8)
+	private String asistenteAvatar = "\uD83D\uDCAC";
+
+	@Column(name = "asistente_posicion", nullable = false, length = 10)
+	private String asistentePosicion = "derecha";
+
+	// Pedir el correo sin permiso es intrusivo: cada negocio decide si lo quiere.
+	@Column(name = "capturar_contactos", nullable = false)
+	private boolean capturarContactos;
+
+	@Column(name = "webhook_url")
+	private String webhookUrl;
+
 	@Column(name = "creado_en", nullable = false)
 	private OffsetDateTime creadoEn;
 

@@ -23,6 +23,10 @@ public class ExcepcionNegocio extends RuntimeException {
 		return new ExcepcionNegocio(HttpStatus.CONFLICT, mensaje);
 	}
 
+	public static ExcepcionNegocio prohibido(String mensaje) {
+		return new ExcepcionNegocio(HttpStatus.FORBIDDEN, mensaje);
+	}
+
 	public static ExcepcionNegocio noAutorizado(String mensaje) {
 		return new ExcepcionNegocio(HttpStatus.UNAUTHORIZED, mensaje);
 	}

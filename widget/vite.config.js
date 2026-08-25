@@ -4,6 +4,17 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: { port: 5178 },
+  // El widget vive en la página de otro: cada kilobyte lo paga el cliente en tiempo de carga.
+  // Preact habla la misma API que React con una fracción del runtime, y se cambia con un alias
+  // sin tocar una sola línea de los componentes.
+  resolve: {
+    alias: {
+      react: 'preact/compat',
+      'react-dom': 'preact/compat',
+      'react-dom/client': 'preact/compat/client',
+      'react/jsx-runtime': 'preact/jsx-runtime',
+    },
+  },
   // En modo libreria Vite NO sustituye esto solo: sin la linea, el navegador
   // revienta con "process is not defined" y ademas se empaqueta el React de desarrollo.
   define: {

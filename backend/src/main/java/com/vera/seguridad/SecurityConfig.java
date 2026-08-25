@@ -2,11 +2,11 @@ package com.vera.seguridad;
 
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -25,16 +25,23 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
 	@Bean
-	public SecurityFilterChain cadena(HttpSecurity http, JwtAuthFilter jwtFiltro) throws Exception {
+	public SecurityFilterChain cadena(HttpSecurity http, JwtAuthFilter jwtFiltro,
+			@Qualifier("corsConfigurationSource") CorsConfigurationSource origenesPermitidos)
+			throws Exception {
 		http
 				.csrf(csrf -> csrf.disable())
-				.cors(Customizer.withDefaults())
+				// Se pasa la fuente a mano: con withDefaults(), Spring Security solo encuentra el
+				// bean si se llama exactamente "corsConfigurationSource" y, si no, no manda ni una
+				// cabecera CORS. En desarrollo no se nota porque Vite hace de proxy.
+				.cors(c -> c.configurationSource(origenesPermitidos))
 				.sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(reglas -> reglas
 						// /error va abierto: un JSON mal formado reenvía ahí sin filtro JWT y el
 						// error real se disfrazaría de 401 "se requiere iniciar sesion".
+						// El widget vive en la web de un cliente y su visitante no tiene cuenta:
+						// se identifica con la clave publica, no con sesion.
 						.requestMatchers("/error", "/api/health", "/api/auth/login", "/api/auth/refresco",
-								"/api/auth/registro")
+								"/api/auth/registro", "/api/widget/**")
 						.permitAll()
 						.anyRequest().authenticated())
 				.exceptionHandling(e -> e
@@ -59,13 +66,26 @@ public class SecurityConfig {
 		return new BCryptPasswordEncoder();
 	}
 
+	// El nombre importa: Spring Security busca este bean por el nombre exacto, y ademas hay otro
+	// CorsConfigurationSource en el contexto (el de Spring MVC) que haria ambigua la inyeccion.
 	@Bean
-	public CorsConfigurationSource cors(@Value("${vera.cors.origenes}") List<String> origenes) {
+	public CorsConfigurationSource corsConfigurationSource(
+			@Value("${vera.cors.origenes}") List<String> origenes) {
 		CorsConfiguration config = new CorsConfiguration();
 		config.setAllowedOrigins(origenes);
 		config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
 		config.setAllowedHeaders(List.of("*"));
+
+		// El widget se instala en el sitio de cada cliente, asi que su origen no se puede
+		// conocer de antemano. Sin cookies ni sesion, abrirlo aqui no expone nada del panel.
+		// ⚠️ El filtro por dominio dado de alta llega en el 5.3.
+		CorsConfiguration deWidget = new CorsConfiguration();
+		deWidget.setAllowedOriginPatterns(List.of("*"));
+		deWidget.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
+		deWidget.setAllowedHeaders(List.of("*"));
+
 		UrlBasedCorsConfigurationSource fuente = new UrlBasedCorsConfigurationSource();
+		fuente.registerCorsConfiguration("/api/widget/**", deWidget);
 		fuente.registerCorsConfiguration("/api/**", config);
 		return fuente;
 	}

@@ -36,7 +36,7 @@ public class ChatController {
 
 	@PostMapping
 	public RagService.Resultado preguntar(@Valid @RequestBody Pregunta pregunta) {
-		return rag.responder(pregunta.texto(), pregunta.conversacionId());
+		return rag.responder(pregunta.texto(), pregunta.conversacionId(), "PANEL");
 	}
 
 	@PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -50,11 +50,14 @@ public class ChatController {
 				TenantContext.establecer(inquilino);
 				RagService.Resultado resultado = rag.responderEnStream(pregunta.texto(),
 						pregunta.conversacionId(),
-						pedazo -> enviar(emisor, "pedazo", pedazo));
+						pedazo -> enviar(emisor, "pedazo", java.util.Map.of("texto", pedazo)), "PANEL");
 				enviar(emisor, "fin", resultado);
 				emisor.complete();
 			} catch (RuntimeException e) {
-				enviar(emisor, "error", e.getMessage());
+				enviar(emisor, "error", java.util.Map.of("error",
+						java.util.Objects.requireNonNullElse(e.getMessage(),
+								"no pude responder en este momento"),
+						"reintentable", WidgetController.esReintentable(e)));
 				emisor.complete();
 			} finally {
 				TenantContext.limpiar();
@@ -63,6 +66,8 @@ public class ChatController {
 		return emisor;
 	}
 
+	// Siempre JSON, nunca texto pelado: un salto de linea dentro del dato parte el evento SSE
+	// en dos y el pedazo se pierde. Serializado, el salto viaja escapado.
 	private void enviar(SseEmitter emisor, String evento, Object datos) {
 		try {
 			emisor.send(SseEmitter.event().name(evento).data(datos));
