@@ -231,6 +231,164 @@ input:disabled {
   color: var(--ok);
 }
 
+.mensaje-aviso {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+  background: rgba(224, 168, 60, 0.12);
+  color: var(--aviso);
+}
+
+/* Fila de campos que se leen juntos: color y avatar, o avatar y posicion. */
+.campos-en-fila {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.campos-en-fila > label {
+  flex: 1;
+  min-width: 0;
+}
+
+/* El navegador pinta el selector de color con su propio alto; sin esto queda descuadrado. */
+input[type='color'] {
+  padding: 0.2rem;
+  height: 2.6rem;
+  cursor: pointer;
+}
+
+/* Vista previa de la burbuja tal como se vera en el sitio del cliente. */
+.previsualizacion {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  border: 1px dashed var(--borde);
+  border-radius: 0.5rem;
+}
+
+/* Rejilla de cifras del resumen de metricas. */
+.cifras {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+}
+
+.cifra {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.9rem;
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.cifra .valor {
+  font-size: 1.7rem;
+  line-height: 1.15;
+}
+
+.cifra .valor.bien {
+  color: var(--ok);
+}
+
+.cifra .valor.flojo {
+  color: var(--aviso);
+}
+
+/* Grafico de actividad sin libreria: son barras, y una libreria entera para esto no se paga. */
+.barras {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 8rem;
+  margin: 1rem 0 0.75rem;
+  padding-bottom: 1px;
+  border-bottom: 1px solid var(--borde);
+}
+
+/* Ojo: .barra ya es la barra lateral de navegacion. Esta es la columna de un dia. */
+.barra-dia {
+  flex: 1;
+  min-width: 3px;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+.barra-pila {
+  width: 100%;
+  background: var(--acento);
+  border-radius: 2px 2px 0 0;
+  min-height: 1px;
+  display: flex;
+  align-items: flex-start;
+}
+
+/* Lo que no supo responder se apila arriba, que es donde se ve. */
+.barra-fallo {
+  width: 100%;
+  background: var(--aviso);
+  border-radius: 2px 2px 0 0;
+}
+
+/* Casilla con su texto al lado, no encima: el label del formulario apila en columna. */
+.casilla {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.5rem !important;
+  margin-top: 1rem;
+}
+
+.casilla input {
+  width: auto;
+}
+
+/* El hilo de una conversacion, desplegado bajo su fila de la bandeja. */
+.hilo {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+  padding: 1rem;
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 0.5rem;
+}
+
+.turno p {
+  margin: 0.15rem 0 0;
+  white-space: pre-wrap;
+}
+
+/* El turno del visitante se sangra al reves que el de Vera: se lee de un vistazo quien habla. */
+.turno.usuario {
+  border-left: 3px solid var(--acento);
+  padding-left: 0.75rem;
+}
+
+.turno.asistente {
+  border-left: 3px solid var(--borde);
+  padding-left: 0.75rem;
+}
+
+/* El fragmento que el modelo si cito: es el que explica la respuesta. */
+.trozo.citado {
+  border-color: var(--ok);
+}
+
+.previsualizacion .burbuja {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  font-size: 1.3rem;
+  flex: none;
+}
+
 .estado {
   display: flex;
   align-items: center;
@@ -407,6 +565,26 @@ input[type='file'] {
   margin: 0.3rem 0 0;
   font-size: 0.85rem;
   color: var(--texto);
+}
+
+/* ---------- Calidad ---------- */
+
+select {
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--borde);
+  background: var(--fondo);
+  color: var(--texto);
+  font: inherit;
+}
+
+select:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+
+select:disabled {
+  color: var(--tenue);
 }
 
 @media (max-width: 46rem) {

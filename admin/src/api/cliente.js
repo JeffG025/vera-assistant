@@ -75,6 +75,21 @@ export async function peticion(ruta, opciones = {}, reintentar = true) {
   return respuesta.json()
 }
 
+// El CSV va autenticado, asi que no vale un enlace suelto: se pide con la sesion puesta y se
+// entrega como archivo desde memoria.
+export async function descargarCsv(ruta, nombre) {
+  const sesion = leerSesion()
+  const respuesta = await fetch(BASE + ruta, {
+    headers: sesion?.acceso ? { Authorization: `Bearer ${sesion.acceso}` } : {},
+  })
+  if (!respuesta.ok) throw new Error(await leerError(respuesta))
+  const enlace = document.createElement('a')
+  enlace.href = URL.createObjectURL(await respuesta.blob())
+  enlace.download = nombre
+  enlace.click()
+  URL.revokeObjectURL(enlace.href)
+}
+
 export const api = {
   login: (datos) => peticion('/auth/login', { method: 'POST', body: JSON.stringify(datos) }),
   registro: (datos) => peticion('/auth/registro', { method: 'POST', body: JSON.stringify(datos) }),
@@ -94,4 +109,16 @@ export const api = {
   rastrearDeNuevo: (id) => peticion(`/fuentes/${id}/rastrear`, { method: 'POST' }),
   fragmentosDe: (id) => peticion(`/fuentes/${id}/fragmentos`),
   borrarFuente: (id) => peticion(`/fuentes/${id}`, { method: 'DELETE' }),
+
+  bandeja: (filtros) => peticion(`/conversaciones?${new URLSearchParams(filtros)}`),
+  contactos: () => peticion('/contactos'),
+  metricas: (dias) => peticion(`/metricas?dias=${dias}`),
+  conversacion: (id) => peticion(`/conversaciones/${id}`),
+
+  casosEval: () => peticion('/evaluacion/casos'),
+  corridas: () => peticion('/evaluacion/corridas'),
+  // Tarda minutos: el examen va despacio a proposito para no toparse con el limite del free tier.
+  correrExamen: (conjunto) => peticion(`/evaluacion/corridas?conjunto=${conjunto}`, { method: 'POST' }),
+  detalleCorrida: (id) => peticion(`/evaluacion/corridas/${id}`),
+  compararCorridas: (id, contra) => peticion(`/evaluacion/corridas/${id}/comparar?contra=${contra}`),
 }

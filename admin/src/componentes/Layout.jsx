@@ -17,6 +17,10 @@ export default function Layout() {
             Panel
           </NavLink>
           <NavLink to="/fuentes">Fuentes</NavLink>
+          <NavLink to="/conversaciones">Conversaciones</NavLink>
+          <NavLink to="/contactos">Contactos</NavLink>
+          <NavLink to="/metricas">Métricas</NavLink>
+          <NavLink to="/calidad">Calidad</NavLink>
           <NavLink to="/ajustes">Ajustes</NavLink>
         </nav>
 
